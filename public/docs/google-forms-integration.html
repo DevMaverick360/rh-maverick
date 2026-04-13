@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Maverick 360 — Integração Google Forms</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --card: #ffffff;
+      --text: #0b0b0b;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #7c3aed;
+      --code-bg: #0b0b0b;
+      --code-fg: #f3f4f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+    .wrap { max-width: 48rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 0.5rem; }
+    .lead { color: var(--muted); font-size: 0.95rem; margin: 0 0 2rem; }
+    h2 { font-size: 1.15rem; font-weight: 700; margin: 2rem 0 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+    p, li { color: #374151; font-size: 0.9rem; }
+    ul { padding-left: 1.25rem; }
+    li { margin: 0.35rem 0; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.8em; background: #eee; padding: 0.1em 0.35em; border-radius: 4px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+    .card-h {
+      display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.75rem;
+      padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); background: #fafafa;
+    }
+    .card-h strong { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .card-h span { font-size: 0.8rem; color: var(--muted); max-width: 28rem; }
+    pre {
+      margin: 0; padding: 1rem; font-size: 0.72rem; line-height: 1.5;
+      background: rgba(11,11,11,0.04); overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    button.copy {
+      cursor: pointer; border: 1px solid var(--border); background: #fff; border-radius: 8px;
+      padding: 0.35rem 0.65rem; font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;
+    }
+    button.copy:hover { background: #f9fafb; }
+    button.copy.ok { border-color: #22c55e; color: #15803d; }
+    .note {
+      margin-top: 2rem; padding: 1rem 1.25rem; border-radius: 12px; border: 1px solid rgba(245, 158, 11, 0.35);
+      background: rgba(245, 158, 11, 0.08); font-size: 0.85rem;
+    }
+    .note strong { display: block; margin-bottom: 0.5rem; }
+    a { color: var(--accent); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Integração Google Forms → Maverick 360</h1>
+    <p class="lead">
+      Documentação da API de candidaturas. Envie nome, e-mail, CV em base64, código da vaga e opcionalmente todas as perguntas e respostas do formulário.
+    </p>
+
+    <h2>1. URL da API</h2>
+    <div class="card" id="block-endpoint">
+      <div class="card-h">
+        <div>
+          <strong>Endpoint POST</strong>
+          <span>Substituído automaticamente pelo domínio atual ao abrir esta página pelo site.</span>
+        </div>
+        <button type="button" class="copy" data-copy-target="endpoint-url">Copiar</button>
+      </div>
+      <pre id="endpoint-url">https://seu-dominio.com/api/cv/submit</pre>
+    </div>
+
+    <h2>2. Headers</h2>
+    <div class="card">
+      <div class="card-h">
+        <div>
+          <strong>Autenticação</strong>
+          <span>Defina <code>CV_INGEST_SECRET</code> no servidor e envie o mesmo valor.</span>
+        </div>
+        <button type="button" class="copy" data-copy-target="hdr">Copiar</button>
+      </div>
+      <pre id="hdr">Content-Type: application/json
+Authorization: Bearer &lt;CV_INGEST_SECRET&gt;
+
+Alternativa:
+x-cv-ingest-secret: &lt;CV_INGEST_SECRET&gt;</pre>
+    </div>
+
+    <h2>3. Variáveis de ambiente (servidor)</h2>
+    <div class="card">
+      <div class="card-h">
+        <div><strong>Referência .env</strong></div>
+        <button type="button" class="copy" data-copy-target="env">Copiar</button>
+      </div>
+      <pre id="env">CV_INGEST_SECRET=
+SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+OPENAI_API_KEY=
+RESEND_API_KEY=</pre>
+    </div>
+
+    <h2>4. Corpo JSON</h2>
+    <ul>
+      <li><strong>Obrigatórios:</strong> <code>name</code>, <code>email</code>, e <code>job_id</code> (UUID) <em>ou</em> <code>job_code</code></li>
+      <li><strong>CV:</strong> <code>cv_base64</code> + <code>cv_filename</code> ou <code>cv_url</code> (HTTPS)</li>
+      <li><strong>Opcional:</strong> <code>phone</code>, <code>form_responses</code> como array <code>[{ "question": "...", "answer": "..." }]</code></li>
+    </ul>
+    <div class="card">
+      <div class="card-h">
+        <div><strong>Exemplo JSON</strong></div>
+        <button type="button" class="copy" data-copy-target="json-ex">Copiar</button>
+      </div>
+      <pre id="json-ex">{
+  "name": "Nome Completo",
+  "email": "email@exemplo.com",
+  "phone": "+55 11 99999-9999",
+  "job_code": "frontend-sp-2025",
+  "cv_base64": "&lt;BASE64_DO_PDF&gt;",
+  "cv_filename": "curriculo.pdf",
+  "cv_mime_type": "application/pdf",
+  "form_responses": [
+    { "question": "Título da pergunta", "answer": "Resposta" }
+  ]
+}</pre>
+    </div>
+
+    <h2>5. Google Apps Script</h2>
+    <p>Gatilho: <strong>Ao enviar formulário</strong>. Ajuste <code>mapNamedFields_</code> aos títulos exatos das perguntas (nome, e-mail, upload de arquivo, etc.).</p>
+    <div class="card">
+      <div class="card-h">
+        <div><strong>Script modelo</strong></div>
+        <button type="button" class="copy" data-copy-target="script">Copiar</button>
+      </div>
+      <pre id="script">/**
+ * Formulário → Extensões → Apps Script
+ * Gatilho: Ao enviar formulário → onFormSubmit
+ */
+const API_URL = 'SUBSTITUA/api/cv/submit';
+const INGEST_SECRET = 'SUBSTITUA_PELO_SEGREDO';
+const JOB_CODE = 'codigo-da-vaga';
+
+function onFormSubmit(e) {
+  var itemResponses = e.response.getItemResponses();
+  var formResponses = [];
+  for (var i = 0; i &lt; itemResponses.length; i++) {
+    var ir = itemResponses[i];
+    var title = ir.getItem().getTitle();
+    var answer = formatAnswer_(ir.getResponse());
+    formResponses.push({ question: title, answer: answer });
+  }
+  var named = mapNamedFields_(e.response);
+  var fileBlob = named.cvFile;
+  if (!fileBlob) throw new Error('Upload de arquivo (CV) não encontrado');
+  var b64 = Utilities.base64Encode(fileBlob.getBytes());
+  var payload = {
+    name: named.name,
+    email: named.email,
+    phone: named.phone || '',
+    job_code: named.jobCode || JOB_CODE,
+    cv_base64: b64,
+    cv_filename: fileBlob.getName() || 'curriculo.pdf',
+    cv_mime_type: fileBlob.getContentType() || 'application/pdf',
+    form_responses: formResponses
+  };
+  var res = UrlFetchApp.fetch(API_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+    headers: { 'Authorization': 'Bearer ' + INGEST_SECRET }
+  });
+  if (res.getResponseCode() &lt; 200 || res.getResponseCode() &gt;= 300) {
+    throw new Error(res.getContentText());
+  }
+}
+
+function formatAnswer_(resp) {
+  if (resp == null) return '';
+  if (Object.prototype.toString.call(resp) === '[object Array]') return resp.join(', ');
+  return String(resp);
+}
+
+function mapNamedFields_(response) {
+  var items = response.getItemResponses();
+  var out = { name: '', email: '', phone: '', jobCode: '', cvFile: null };
+  for (var i = 0; i &lt; items.length; i++) {
+    var ir = items[i];
+    var title = ir.getItem().getTitle();
+    var type = ir.getItem().getType();
+    if (type === FormApp.ItemType.FILE_UPLOAD) {
+      var ids = ir.getResponse();
+      if (ids &amp;&amp; ids.length) out.cvFile = DriveApp.getFileById(ids[0]).getBlob();
+      continue;
+    }
+    var t = title.toLowerCase();
+    var val = formatAnswer_(ir.getResponse());
+    if (t.indexOf('nome') !== -1 &amp;&amp; t.indexOf('email') === -1) out.name = val;
+    else if (t.indexOf('email') !== -1) out.email = val;
+    else if (t.indexOf('telefone') !== -1 || t.indexOf('phone') !== -1) out.phone = val;
+    else if (t.indexOf('vaga') !== -1 || t.indexOf('código') !== -1) out.jobCode = val;
+  }
+  return out;
+}</pre>
+    </div>
+
+    <h2>6. curl</h2>
+    <div class="card">
+      <div class="card-h">
+        <div><strong>Linha de comando</strong></div>
+        <button type="button" class="copy" data-copy-target="curl">Copiar</button>
+      </div>
+      <pre id="curl">curl -sS -X POST "https://SEU_DOMINIO/api/cv/submit" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer SEU_CV_INGEST_SECRET" \
+  -d @corpo.json</pre>
+    </div>
+
+    <div class="note">
+      <strong>Checklist</strong>
+      <ul style="margin:0">
+        <li>Migrações Supabase aplicadas (<code>application_code</code>, <code>form_responses</code>)</li>
+        <li>Bucket <code>cvs</code> e <code>SUPABASE_SERVICE_ROLE_KEY</code> no servidor</li>
+        <li><code>job_code</code> da vaga igual ao enviado pelo script</li>
+      </ul>
+    </div>
+
+    <p style="margin-top:2rem;font-size:0.8rem;color:var(--muted)">
+      Maverick 360 · Documentação gerada para integração com formulários externos.
+    </p>
+  </div>
+
+  <script>
+    (function () {
+      var ep = document.getElementById('endpoint-url');
+      if (ep &amp;&amp; window.location.origin &amp;&amp; window.location.protocol !== 'file:') {
+        ep.textContent = window.location.origin + '/api/cv/submit';
+      }
+      function copyFromId(id, btn) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var text = el.textContent || '';
+        function ok() {
+          btn.classList.add('ok');
+          btn.textContent = 'Copiado!';
+          setTimeout(function () { btn.classList.remove('ok'); btn.textContent = 'Copiar'; }, 2000);
+        }
+        if (navigator.clipboard &amp;&amp; navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(ok).catch(function () { fallback(text, ok); });
+        } else fallback(text, ok);
+      }
+      function fallback(text, ok) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); ok(); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+      document.querySelectorAll('[data-copy-target]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          copyFromId(btn.getAttribute('data-copy-target'), btn);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
