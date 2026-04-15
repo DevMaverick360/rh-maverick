@@ -126,9 +126,9 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
     )
   }
 
-  let buffer: Buffer
-  let mimeType: string
-  let fileName: string
+  let buffer: Buffer | null = null
+  let mimeType = 'application/octet-stream'
+  let fileName = 'curriculo.pdf'
 
   if (body.cv_url?.trim()) {
     const fetched = await fetchCvFromUrl(body.cv_url.trim())
@@ -142,16 +142,15 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
     buffer = b
     mimeType = body.cv_mime_type?.trim() || 'application/pdf'
     fileName = body.cv_filename?.trim() || 'curriculo.pdf'
-  } else {
-    return NextResponse.json(
-      { error: 'Informe cv_base64 (+ cv_filename) ou cv_url (HTTPS)' },
-      { status: 400 }
-    )
   }
 
-  const uploaded = await uploadCvBuffer(supabase, buffer, fileName, mimeType)
-  if ('error' in uploaded) {
-    return NextResponse.json({ error: uploaded.error }, { status: 500 })
+  let cvUrl: string | null = null
+  if (buffer && buffer.length > 0) {
+    const uploaded = await uploadCvBuffer(supabase, buffer, fileName, mimeType)
+    if ('error' in uploaded) {
+      return NextResponse.json({ error: uploaded.error }, { status: 500 })
+    }
+    cvUrl = uploaded.cvUrl
   }
 
   const inserted = await insertCandidateRow(supabase, {
@@ -159,7 +158,7 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
     email,
     phone,
     jobId: jobResolved.id,
-    cvUrl: uploaded.cvUrl,
+    cvUrl,
     formResponses: parsedForm,
   })
   if ('error' in inserted) {
@@ -173,7 +172,7 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
     email,
     buffer,
     mimeType,
-    uploaded.cvUrl,
+    cvUrl,
     jobResolved.id,
     parsedForm
   )
@@ -233,21 +232,27 @@ async function handleMultipartIngest(req: Request, supabase: Awaited<ReturnType<
     )
   }
 
-  if (!cvFile || !(cvFile instanceof File) || cvFile.size === 0) {
-    return NextResponse.json({ error: 'Arquivo cv é obrigatório' }, { status: 400 })
-  }
-  if (cvFile.size > CV_MAX_BYTES) {
-    return NextResponse.json({ error: 'CV excede o tamanho máximo (10MB)' }, { status: 400 })
+  let buffer: Buffer | null = null
+  let mimeType = 'application/octet-stream'
+  let fileName = 'curriculo.pdf'
+
+  if (cvFile && cvFile instanceof File && cvFile.size > 0) {
+    if (cvFile.size > CV_MAX_BYTES) {
+      return NextResponse.json({ error: 'CV excede o tamanho máximo (10MB)' }, { status: 400 })
+    }
+    const arrayBuffer = await cvFile.arrayBuffer()
+    buffer = Buffer.from(arrayBuffer)
+    mimeType = cvFile.type || 'application/octet-stream'
+    fileName = cvFile.name || 'curriculo.pdf'
   }
 
-  const arrayBuffer = await cvFile.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
-  const mimeType = cvFile.type || 'application/octet-stream'
-  const fileName = cvFile.name || 'curriculo.pdf'
-
-  const uploaded = await uploadCvBuffer(supabase, buffer, fileName, mimeType)
-  if ('error' in uploaded) {
-    return NextResponse.json({ error: uploaded.error }, { status: 500 })
+  let cvUrl: string | null = null
+  if (buffer && buffer.length > 0) {
+    const uploaded = await uploadCvBuffer(supabase, buffer, fileName, mimeType)
+    if ('error' in uploaded) {
+      return NextResponse.json({ error: uploaded.error }, { status: 500 })
+    }
+    cvUrl = uploaded.cvUrl
   }
 
   const inserted = await insertCandidateRow(supabase, {
@@ -255,7 +260,7 @@ async function handleMultipartIngest(req: Request, supabase: Awaited<ReturnType<
     email,
     phone,
     jobId: jobResolved.id,
-    cvUrl: uploaded.cvUrl,
+    cvUrl,
     formResponses: parsedFormMultipart,
   })
   if ('error' in inserted) {
@@ -269,7 +274,7 @@ async function handleMultipartIngest(req: Request, supabase: Awaited<ReturnType<
     email,
     buffer,
     mimeType,
-    uploaded.cvUrl,
+    cvUrl,
     jobResolved.id,
     parsedFormMultipart
   )
@@ -305,23 +310,23 @@ export async function GET() {
       contentType: 'application/json',
       plugAndPlay: {
         description:
-          'Pode omitir name, email e phone se enviar form_responses (ou form_submission) com TODAS as perguntas/respostas do Google Form. O servidor infere contato (e-mail por regex; nome/telefone por heurística). O CV continua em cv_base64 ou cv_url.',
-        required: ['job_id OU job_code', 'cv_base64 OU cv_url', 'form_responses OU (name E email)'],
+          'Pode omitir name, email e phone se enviar form_responses (ou form_submission) com as respostas do Google Form — o servidor infere contato. O CV (cv_base64 ou cv_url) é opcional: candidaturas só com formulário são aceites.',
+        required: ['job_id OU job_code', 'form_responses OU (name E email)'],
       },
-      required: ['job_id OU job_code', 'cv_base64 OU cv_url'],
+      required: ['job_id OU job_code'],
       optional: [
+        'cv_base64, cv_filename, cv_mime_type — ou cv_url (HTTPS)',
         'name, email, phone — se omitidos, use form_responses para inferência',
-        'form_responses OU form_submission: array de { question: string, answer: string } — snapshot completo do formulário (recomendado)',
-        'cv_filename',
-        'cv_mime_type (default application/pdf com base64)',
+        'form_responses OU form_submission: array de { question: string, answer: string }',
       ],
       job_code:
         'Código cadastrado no painel na vaga (minúsculas; ex.: frontend-sp). Alternativa ao UUID job_id.',
     },
     multipart: {
       contentType: 'multipart/form-data',
-      fields: ['cv (file)', 'job_id OU job_code'],
+      fields: ['job_id OU job_code'],
       optional: [
+        'cv (file) — opcional',
         'name, email, phone — ou form_responses / form_submission (string JSON) para inferência',
       ],
     },

@@ -117,7 +117,7 @@ export async function insertCandidateRow(
     email: string
     phone: string | null
     jobId: string
-    cvUrl: string
+    cvUrl: string | null
     formResponses?: FormQaItem[] | null
   }
 ): Promise<{ id: string } | { error: string }> {
@@ -128,7 +128,7 @@ export async function insertCandidateRow(
       email: input.email.trim(),
       phone: input.phone?.trim() || null,
       job_id: input.jobId,
-      cv_url: input.cvUrl,
+      cv_url: input.cvUrl ?? null,
       status: 'pending',
       form_responses: input.formResponses?.length ? input.formResponses : null,
     })
@@ -142,14 +142,17 @@ export async function insertCandidateRow(
   return { id: candidate.id }
 }
 
+const NO_CV_PLACEHOLDER_PT =
+  '(Candidatura sem ficheiro de currículo. Avalie apenas com base nas respostas do formulário e nos critérios da vaga.)'
+
 export async function processCandidateAI(
   supabase: SupabaseClient,
   candidateId: string,
   name: string,
   email: string,
-  buffer: Buffer,
+  buffer: Buffer | null,
   mimeType: string,
-  cvUrl: string,
+  cvUrl: string | null,
   jobId: string,
   formResponses?: FormQaItem[] | null
 ): Promise<void> {
@@ -162,7 +165,8 @@ export async function processCandidateAI(
 
     if (jobError || !job) return
 
-    const cvText = await extractCvText(buffer, mimeType)
+    const cvText =
+      buffer && buffer.length > 0 ? await extractCvText(buffer, mimeType) : NO_CV_PLACEHOLDER_PT
     const formContext = formResponsesToAiContext(formResponses ?? null)
     const aiResult = await analyzeCVWithAI(
       cvText,

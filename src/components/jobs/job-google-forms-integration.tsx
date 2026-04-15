@@ -90,14 +90,19 @@ function enviarParaMaverickComResposta_(response) {
 
     if (tipo === FormApp.ItemType.FILE_UPLOAD) {
       var ids = ir.getResponse();
-      if (ids && ids.length) {
-        var id0 = String(ids[0]);
-        var m = id0.match(/[-\\w]{25,}/);
-        var idArquivo = m ? m[0] : id0;
-        var arquivo = DriveApp.getFileById(idArquivo);
-        arquivoCv = arquivo.getBlob();
-        nomeArquivo = arquivo.getName() || nomeArquivo;
-        tipoArquivo = arquivo.getMimeType() || tipoArquivo;
+      if (ids != null && ids !== '') {
+        if (Object.prototype.toString.call(ids) !== '[object Array]') {
+          ids = [String(ids)];
+        }
+        if (ids.length) {
+          var id0 = String(ids[0]);
+          var m = id0.match(/[-\\w]{25,}/);
+          var idArquivo = m ? m[0] : id0;
+          var arquivo = DriveApp.getFileById(idArquivo);
+          arquivoCv = arquivo.getBlob();
+          nomeArquivo = arquivo.getName() || nomeArquivo;
+          tipoArquivo = arquivo.getMimeType() || tipoArquivo;
+        }
       }
       continue;
     }
@@ -105,16 +110,19 @@ function enviarParaMaverickComResposta_(response) {
     respostas.push({ question: titulo, answer: formatarResposta(ir.getResponse()) });
   }
 
-  if (!arquivoCv) {
-    throw new Error('Inclua uma pergunta do tipo "Upload de arquivo" para o currículo (PDF). As outras perguntas podem ser como quiser.');
+  if (!arquivoCv && !respostas.length) {
+    throw new Error(
+      'Inclua perguntas no formulário (ex.: e-mail do candidato) ou uma pergunta "Upload de arquivo" com PDF. ' +
+      'A API precisa de respostas ou de um CV para registar a candidatura.'
+    );
   }
 
-  var corpo = {
-    cv_base64: Utilities.base64Encode(arquivoCv.getBytes()),
-    cv_filename: nomeArquivo,
-    cv_mime_type: tipoArquivo,
-    form_responses: respostas
-  };
+  var corpo = { form_responses: respostas };
+  if (arquivoCv) {
+    corpo.cv_base64 = Utilities.base64Encode(arquivoCv.getBytes());
+    corpo.cv_filename = nomeArquivo;
+    corpo.cv_mime_type = tipoArquivo;
+  }
   if (CODIGO_VAGA) corpo.job_code = CODIGO_VAGA;
   if (ID_VAGA) corpo.job_id = ID_VAGA;
 
@@ -144,11 +152,11 @@ function formatarResposta(resp) {
 
 const ORIENTACAO_FORMULARIO = `O que o formulário precisa ter:
 
-• Uma pergunta de e-mail (de preferência o tipo "Validação de e-mail" do Google) — para identificarmos o candidato.
-• Uma pergunta "Upload de arquivo" para o currículo em PDF.
-• Qualquer outra pergunta (texto, múltipla escolha, etc.) — as respostas aparecem no Maverick junto com a candidatura.
+• Uma pergunta de e-mail (de preferência o tipo "Validação de e-mail" do Google) — para identificarmos o candidato (obrigatório se não houver CV).
+• Opcional: pergunta "Upload de arquivo" (clip) para o currículo em PDF. Links numa caixa de texto não substituem o upload.
+• Outras perguntas (texto, múltipla escolha, etc.) — aparecem no Maverick em form_responses.
 
-Não é preciso mudar o script quando mudar as perguntas: ele envia tudo automaticamente, exceto o arquivo, que vai anexado.`
+Sem upload, o Maverick regista a candidatura só com as respostas (a IA avalia com base no formulário). Com upload, o ficheiro é anexado. Quem anexa ficheiros precisa de sessão Google.`
 
 export function JobGoogleFormsIntegration({ job }: { job: JobIntegrationJob }) {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
@@ -172,8 +180,8 @@ export function JobGoogleFormsIntegration({ job }: { job: JobIntegrationJob }) {
           </div>
           <h1 className="text-2xl font-bold tracking-tight">Conectar formulário a esta vaga</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-            Use o script abaixo no Google Formulário. Cada envio registra a candidatura no Maverick com o currículo e
-            todas as respostas.
+            Use o script abaixo no Google Formulário. Cada envio regista a candidatura no Maverick com as respostas; o
+            upload de CV é opcional (a API aceita formulário só com perguntas).
           </p>
           <p className="text-sm font-semibold mt-3">{job.title}</p>
           {hasJobCode ? (

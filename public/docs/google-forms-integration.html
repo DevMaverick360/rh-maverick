@@ -116,7 +116,7 @@ RESEND_API_KEY=</pre>
 
     <h2>4. Corpo JSON</h2>
     <ul>
-      <li><strong>Plug-and-play:</strong> <code>job_id</code> ou <code>job_code</code>, CV (<code>cv_base64</code> ou <code>cv_url</code>), <code>form_responses</code> ou <code>form_submission</code> — array <code>[{ "question": "...", "answer": "..." }]</code> com todas as respostas (exceto o arquivo, enviado em base64).</li>
+      <li><strong>Plug-and-play:</strong> <code>job_id</code> ou <code>job_code</code>, e <code>form_responses</code> (ou <code>form_submission</code>) — ou <code>name</code> + <code>email</code> no JSON. CV (<code>cv_base64</code> ou <code>cv_url</code>) é <strong>opcional</strong>.</li>
       <li><strong>Opcional explícito:</strong> <code>name</code>, <code>email</code>, <code>phone</code> (substituem ou complementam a inferência).</li>
     </ul>
     <div class="card">
@@ -126,13 +126,13 @@ RESEND_API_KEY=</pre>
       </div>
       <pre id="json-ex">{
   "job_code": "frontend-sp-2025",
-  "cv_base64": "&lt;BASE64_DO_PDF&gt;",
-  "cv_filename": "curriculo.pdf",
-  "cv_mime_type": "application/pdf",
   "form_responses": [
     { "question": "Qualquer pergunta", "answer": "Resposta" },
     { "question": "E-mail", "answer": "candidato@exemplo.com" }
-  ]
+  ],
+  "cv_base64": "&lt;opcional&gt;",
+  "cv_filename": "curriculo.pdf",
+  "cv_mime_type": "application/pdf"
 }</pre>
     </div>
 
@@ -166,26 +166,29 @@ function aposEnviarFormularioMaverick(e) {
     var title = item.getTitle();
     if (type === FormApp.ItemType.FILE_UPLOAD) {
       var ids = ir.getResponse();
-      if (ids &amp;&amp; ids.length) {
-        var id0 = String(ids[0]);
-        var m = id0.match(/[-\w]{25,}/);
-        var fileId = m ? m[0] : id0;
-        var file = DriveApp.getFileById(fileId);
-        cvBlob = file.getBlob();
-        cvName = file.getName() || cvName;
-        cvMime = file.getMimeType() || cvMime;
+      if (ids != null &amp;&amp; ids !== '') {
+        if (Object.prototype.toString.call(ids) !== '[object Array]') ids = [String(ids)];
+        if (ids.length) {
+          var id0 = String(ids[0]);
+          var m = id0.match(/[-\w]{25,}/);
+          var fileId = m ? m[0] : id0;
+          var file = DriveApp.getFileById(fileId);
+          cvBlob = file.getBlob();
+          cvName = file.getName() || cvName;
+          cvMime = file.getMimeType() || cvMime;
+        }
       }
       continue;
     }
     formResponses.push({ question: title, answer: formatAnswer_(ir.getResponse()) });
   }
-  if (!cvBlob) throw new Error('Adicione pergunta de upload (CV)');
-  var payload = {
-    cv_base64: Utilities.base64Encode(cvBlob.getBytes()),
-    cv_filename: cvName,
-    cv_mime_type: cvMime,
-    form_responses: formResponses
-  };
+  if (!cvBlob &amp;&amp; !formResponses.length) throw new Error('Precisa de respostas (ex.: e-mail) ou ficheiro CV.');
+  var payload = { form_responses: formResponses };
+  if (cvBlob) {
+    payload.cv_base64 = Utilities.base64Encode(cvBlob.getBytes());
+    payload.cv_filename = cvName;
+    payload.cv_mime_type = cvMime;
+  }
   if (JOB_CODE) payload.job_code = JOB_CODE;
   if (JOB_ID) payload.job_id = JOB_ID;
   var res = UrlFetchApp.fetch(API_URL, {

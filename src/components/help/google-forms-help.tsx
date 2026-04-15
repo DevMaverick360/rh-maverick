@@ -20,17 +20,17 @@ function useOrigin() {
 
 const EXAMPLE_JSON = `{
   "job_code": "frontend-sp-2025",
-  "cv_base64": "<BASE64_DO_PDF>",
-  "cv_filename": "curriculo.pdf",
-  "cv_mime_type": "application/pdf",
   "form_responses": [
     { "question": "Qualquer pergunta", "answer": "Resposta livre" },
     { "question": "E-mail", "answer": "candidato@exemplo.com" }
-  ]
+  ],
+  "cv_base64": "<opcional — omita em formulários sem upload>",
+  "cv_filename": "curriculo.pdf",
+  "cv_mime_type": "application/pdf"
 }`
 
 const APPS_SCRIPT = `/**
- * Plug-and-play: form_responses + CV. Gatilho INSTALÁVEL obrigatório.
+ * Plug-and-play: form_responses + CV opcional. Gatilho INSTALÁVEL obrigatório.
  * NÃO use a função reservada onFormSubmit — o Google a trata como gatilho SIMPLES e bloqueia UrlFetchApp
  * (o form grava respostas, mas a API nunca é chamada).
  *
@@ -59,30 +59,33 @@ function aposEnviarFormularioMaverick(e) {
 
     if (type === FormApp.ItemType.FILE_UPLOAD) {
       var ids = ir.getResponse();
-      if (ids && ids.length) {
-        var id0 = String(ids[0]);
-        var m = id0.match(/[-\\w]{25,}/);
-        var fileId = m ? m[0] : id0;
-        var file = DriveApp.getFileById(fileId);
-        cvBlob = file.getBlob();
-        cvName = file.getName() || cvName;
-        cvMime = file.getMimeType() || cvMime;
+      if (ids != null && ids !== '') {
+        if (Object.prototype.toString.call(ids) !== '[object Array]') ids = [String(ids)];
+        if (ids.length) {
+          var id0 = String(ids[0]);
+          var m = id0.match(/[-\\w]{25,}/);
+          var fileId = m ? m[0] : id0;
+          var file = DriveApp.getFileById(fileId);
+          cvBlob = file.getBlob();
+          cvName = file.getName() || cvName;
+          cvMime = file.getMimeType() || cvMime;
+        }
       }
       continue;
     }
     formResponses.push({ question: title, answer: formatAnswer(ir.getResponse()) });
   }
 
-  if (!cvBlob) {
-    throw new Error('Adicione pergunta "Upload de arquivo" para o CV (PDF).');
+  if (!cvBlob && !formResponses.length) {
+    throw new Error('Precisa de respostas (ex.: e-mail) ou ficheiro de CV.');
   }
 
-  var payload = {
-    cv_base64: Utilities.base64Encode(cvBlob.getBytes()),
-    cv_filename: cvName,
-    cv_mime_type: cvMime,
-    form_responses: formResponses
-  };
+  var payload = { form_responses: formResponses };
+  if (cvBlob) {
+    payload.cv_base64 = Utilities.base64Encode(cvBlob.getBytes());
+    payload.cv_filename = cvName;
+    payload.cv_mime_type = cvMime;
+  }
   if (JOB_CODE) payload.job_code = JOB_CODE;
   if (JOB_ID) payload.job_id = JOB_ID;
 
@@ -204,17 +207,17 @@ RESEND_API_KEY=`
         <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
           <li>
             <strong>Plug-and-play:</strong> <code className="text-xs">job_id</code> ou <code className="text-xs">job_code</code>,{' '}
-            <code className="text-xs">cv_base64</code> (ou <code className="text-xs">cv_url</code>) e{' '}
-            <code className="text-xs">form_responses</code> (ou <code className="text-xs">form_submission</code>) — array{' '}
-            <code className="text-xs">{'{ question, answer }'}</code> com <em>todas</em> as respostas do formulário. Inclua
-            pelo menos uma resposta com e-mail válido.
+            e <code className="text-xs">form_responses</code> (ou <code className="text-xs">form_submission</code>) — array{' '}
+            <code className="text-xs">{'{ question, answer }'}</code> — ou <code className="text-xs">name</code> +{' '}
+            <code className="text-xs">email</code> no JSON. <code className="text-xs">cv_base64</code> /{' '}
+            <code className="text-xs">cv_url</code> são <em>opcionais</em> (formulário sem upload de CV é válido).
           </li>
           <li>
             <strong>Opcional explícito:</strong> <code className="text-xs">name</code>, <code className="text-xs">email</code>,{' '}
-            <code className="text-xs">phone</code> — se enviados, têm prioridade sobre a inferência.
+            <code className="text-xs">phone</code> — se enviados, têm prioridade sobre a inferência a partir das respostas.
           </li>
-          <li>Você também pode enviar só <code className="text-xs">name</code>, <code className="text-xs">email</code> e{' '}
-            <code className="text-xs">form_responses</code> como contexto extra (sem inferência de e-mail nas respostas).</li>
+          <li>Sem CV, inclua nas respostas um e-mail identificável (ou envie <code className="text-xs">name</code> e{' '}
+            <code className="text-xs">email</code> no corpo).</li>
         </ul>
         <CopyBlock label="Exemplo de JSON (inferência)" value={EXAMPLE_JSON} multiline />
       </section>
