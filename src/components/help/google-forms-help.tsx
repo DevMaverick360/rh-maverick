@@ -34,16 +34,16 @@ const APPS_SCRIPT = `/**
  * NÃO use a função reservada onFormSubmit — o Google a trata como gatilho SIMPLES e bloqueia UrlFetchApp
  * (o form grava respostas, mas a API nunca é chamada).
  *
- * Relógio → Adicionar gatilho → função aposEnviarFormularioMaverick → Do formulário → Ao enviar o formulário.
+ * Formulário → Extensões → Apps Script → cole → Salvar. Relógio → gatilho na função enviarMaverick.
  */
 const API_URL = 'SUBSTITUA_PELA_URL_DO_SEU_SITE/api/cv/submit';
 const INGEST_SECRET = 'SUBSTITUA_PELO_CV_INGEST_SECRET';
 const JOB_CODE = 'codigo-da-vaga-no-painel';
 const JOB_ID = '';
 
-function aposEnviarFormularioMaverick(e) {
+function enviarMaverick(e) {
   if (!e || !e.response) {
-    throw new Error('Configure gatilho instalável em aposEnviarFormularioMaverick (não use onFormSubmit).');
+    throw new Error('Gatilho: enviarMaverick, origem Do formulário, Ao enviar o formulário (não use onFormSubmit).');
   }
   var itemResponses = e.response.getItemResponses();
   var formResponses = [];
@@ -100,6 +100,10 @@ function aposEnviarFormularioMaverick(e) {
   if (code < 200 || code >= 300) {
     throw new Error('API ' + code + ': ' + res.getContentText());
   }
+}
+
+function aposEnviarFormularioMaverick(e) {
+  enviarMaverick(e);
 }
 
 function formatAnswer(resp) {
@@ -225,9 +229,9 @@ RESEND_API_KEY=`
       <section className="space-y-4">
         <h2 className="text-lg font-bold">5. Google Apps Script</h2>
         <p className="text-sm text-muted-foreground">
-          Gatilho <strong>instalável</strong>: função <code className="text-xs">aposEnviarFormularioMaverick</code>, origem{' '}
-          <strong>Do formulário</strong>, evento <strong>Ao enviar o formulário</strong>. Não use{' '}
-          <code className="text-xs">onFormSubmit</code> — o gatilho simples não permite HTTP à API. Ajuste{' '}
+          Gatilho <strong>instalável</strong>: função <code className="text-xs">enviarMaverick</code> (nome exatamente
+          como no script), origem <strong>Do formulário</strong>, evento <strong>Ao enviar o formulário</strong>. Não
+          use <code className="text-xs">onFormSubmit</code> — gatilho simples sem HTTP. Ajuste{' '}
           <code className="text-xs">API_URL</code>, <code className="text-xs">INGEST_SECRET</code> e{' '}
           <code className="text-xs">JOB_CODE</code>.
         </p>

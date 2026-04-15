@@ -26,18 +26,19 @@ function buildAppsScript(apiUrl: string, job: JobIntegrationJob): string {
  * Vaga: ${safeTitle}
  *
  * IMPORTANTE — Gatilho INSTALÁVEL (obrigatório):
- * A função reservada "onFormSubmit" usa gatilho SIMPLES do Google: ela NÃO pode chamar a internet (UrlFetchApp).
- * Por isso as respostas gravam no Form, mas a API não recebe nada. Use SEMPRE a função aposEnviarFormularioMaverick
- * com um gatilho INSTALÁVEL (passos abaixo).
+ * A função reservada "onFormSubmit" usa gatilho SIMPLES: NÃO pode chamar UrlFetchApp (a API não recebe nada).
+ * Crie gatilho INSTALÁVEL na função enviarMaverick (nome curto — copie exatamente do menu do gatilho).
  *
  * Como usar:
- * 1) Formulário → Extensões → Apps Script → cole este arquivo → Salvar.
- * 2) Ícone de relógio (Gatilhos) → Adicionar gatilho:
- *    - função: aposEnviarFormularioMaverick
- *    - origem do evento: Do formulário
- *    - tipo de evento: Ao enviar o formulário
- *    → Salvar → autorize (Drive + conexões externas).
- * 3) Teste enviando o formulário pelo link público.
+ * 1) Abra o script A PARTIR DO FORMULÁRIO: Formulário → Extensões → Apps Script (fica ligado ao form).
+ * 2) Cole este código → Salvar (Ctrl+S). Confirme na barra lateral que aparece "enviarMaverick".
+ * 3) Relógio (Gatilhos) → Adicionar gatilho:
+ *    - função a executar: enviarMaverick  (ou aposEnviarFormularioMaverick — alias)
+ *    - origem: Do formulário
+ *    - evento: Ao enviar o formulário
+ *    → Salvar → autorize (Drive + rede).
+ * 4) Se aparecer "function not found": confira o nome no gatilho e que o projeto está guardado (sem erros de sintaxe).
+ * 5) Teste pelo link público do formulário.
  *
  * Teste pelo editor (▶): função testarComUltimaResposta — após existir pelo menos 1 envio pelo form.
  */
@@ -46,17 +47,22 @@ const TOKEN_INTEGRACAO = ${JSON.stringify(INTEGRATION_TOKEN)};
 ${jobBlock}
 
 /**
- * Use APENAS com gatilho INSTALÁVEL "Ao enviar o formulário" → esta função.
- * (Não renomeie para onFormSubmit — o Google bloqueia HTTP no gatilho simples dessa função.)
+ * Ponto de entrada recomendado no gatilho instalável (nome curto = menos erros).
+ * NÃO use a função reservada onFormSubmit — gatilho simples bloqueia UrlFetchApp.
  */
-function aposEnviarFormularioMaverick(e) {
+function enviarMaverick(e) {
   if (!e || !e.response) {
     throw new Error(
-      'Configure o gatilho instalável "Ao enviar o formulário" em aposEnviarFormularioMaverick. ' +
-      'Para teste manual no editor, use testarComUltimaResposta().'
+      'Gatilho: função enviarMaverick (ou aposEnviarFormularioMaverick), origem "Do formulário", evento "Ao enviar o formulário". ' +
+      'Teste no editor: testarComUltimaResposta().'
     );
   }
   enviarParaMaverickComResposta_(e.response);
+}
+
+/** Alias — pode usar no gatilho em vez de enviarMaverick */
+function aposEnviarFormularioMaverick(e) {
+  enviarMaverick(e);
 }
 
 /**
@@ -212,19 +218,21 @@ export function JobGoogleFormsIntegration({ job }: { job: JobIntegrationJob }) {
           </li>
           <li>
             <strong>Gatilho instalável (obrigatório):</strong> no Apps Script, <strong>Relógio</strong> →{' '}
-            <strong>Adicionar gatilho</strong> → função <code className="text-xs font-mono">aposEnviarFormularioMaverick</code>{' '}
-            → origem <strong>Do formulário</strong> → evento <strong>Ao enviar o formulário</strong> → salvar e
-            autorizar. Sem isso, o Google só grava a resposta no Form e <strong>não chama a API</strong> (limitação do
-            gatilho simples <code className="text-xs font-mono">onFormSubmit</code>).
+            <strong>Adicionar gatilho</strong> → função <code className="text-xs font-mono">enviarMaverick</code> (nome
+            exatamente como no código) → origem <strong>Do formulário</strong> → evento{' '}
+            <strong>Ao enviar o formulário</strong> → salvar e autorizar. Erro &quot;function not found&quot;: o gatilho
+            aponta para um nome que não existe no ficheiro guardado — apague o gatilho errado e crie de novo após
+            colar o script. Sem gatilho instalável, o Google só grava no Form (o simples{' '}
+            <code className="text-xs font-mono">onFormSubmit</code> não permite HTTP).
           </li>
           <li>
             <strong>Teste pelo formulário:</strong> envie pelo link público; o gatilho deve executar{' '}
-            <code className="text-xs font-mono">aposEnviarFormularioMaverick</code>.
+            <code className="text-xs font-mono">enviarMaverick</code>.
           </li>
           <li>
             <strong>Teste pelo editor (▶):</strong> após um envio real, rode{' '}
             <code className="text-xs font-mono">testarComUltimaResposta</code> (não use ▶ em{' '}
-            <code className="text-xs font-mono">aposEnviarFormularioMaverick</code>).
+            <code className="text-xs font-mono">enviarMaverick</code>).
           </li>
           <li>Confira no Maverick se a candidatura apareceu.</li>
         </ol>
