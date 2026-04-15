@@ -81,6 +81,10 @@ function enviarMaverick(e) {
   }
 
   var payload = { form_responses: formResponses };
+  try {
+    var er = e.response.getRespondentEmail ? String(e.response.getRespondentEmail() || '').trim() : '';
+    if (er) payload.email = er;
+  } catch (ignore) {}
   if (cvBlob) {
     payload.cv_base64 = Utilities.base64Encode(cvBlob.getBytes());
     payload.cv_filename = cvName;

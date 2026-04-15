@@ -41,6 +41,9 @@ function buildAppsScript(apiUrl: string, job: JobIntegrationJob): string {
  * 5) Teste pelo link público do formulário.
  *
  * Teste pelo editor (▶): função testarComUltimaResposta — após existir pelo menos 1 envio pelo form.
+ *
+ * E-mail: se o form usar "Recolher endereços de e-mail dos inquiridos", o script envia corpo.email automaticamente
+ * (não depende de haver e-mail numa pergunta de texto).
  */
 const ENDERECO_API = ${JSON.stringify(apiUrl)};
 const TOKEN_INTEGRACAO = ${JSON.stringify(INTEGRATION_TOKEN)};
@@ -124,6 +127,10 @@ function enviarParaMaverickComResposta_(response) {
   }
 
   var corpo = { form_responses: respostas };
+  try {
+    var emailInquirido = response.getRespondentEmail ? String(response.getRespondentEmail() || '').trim() : '';
+    if (emailInquirido) corpo.email = emailInquirido;
+  } catch (ignore) {}
   if (arquivoCv) {
     corpo.cv_base64 = Utilities.base64Encode(arquivoCv.getBytes());
     corpo.cv_filename = nomeArquivo;
@@ -158,7 +165,7 @@ function formatarResposta(resp) {
 
 const ORIENTACAO_FORMULARIO = `O que o formulário precisa ter:
 
-• Uma pergunta de e-mail (de preferência o tipo "Validação de e-mail" do Google) — para identificarmos o candidato (obrigatório se não houver CV).
+• E-mail do candidato: em Definições do formulário pode usar "Recolher endereços de e-mail dos inquiridos" (o script envia automaticamente) e/ou pergunta "Validação de e-mail".
 • Opcional: pergunta "Upload de arquivo" (clip) para o currículo em PDF. Links numa caixa de texto não substituem o upload.
 • Outras perguntas (texto, múltipla escolha, etc.) — aparecem no Maverick em form_responses.
 

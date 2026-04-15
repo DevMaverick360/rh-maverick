@@ -40,6 +40,8 @@ async function getSupabaseForIngest() {
 type JsonBody = {
   name?: string
   email?: string
+  /** Alias (ex.: e-mail do inquirido no Google Forms quando "Recolher e-mails" está ativo) */
+  respondent_email?: string
   phone?: string
   job_id?: string
   job_code?: string
@@ -99,14 +101,15 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
   }
 
   let name = body.name?.trim() ?? ''
-  let email = body.email?.trim() ?? ''
+  let email = body.email?.trim() || body.respondent_email?.trim() || ''
   let phone: string | null = body.phone?.trim() || null
 
   const needsInference = !name || !email || !phone
   if (needsInference && parsedForm?.length) {
     const extracted = extractContactFromFormResponses(parsedForm)
     if ('error' in extracted) {
-      if (!name || !email) {
+      // Se e-mail já veio no JSON (ex.: getRespondentEmail no Apps Script), não exigir regex nas respostas
+      if (!email) {
         return NextResponse.json({ error: extracted.error }, { status: 400 })
       }
     } else {
@@ -114,6 +117,10 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
       if (!email) email = extracted.email
       if (!phone) phone = extracted.phone
     }
+  }
+
+  if (!name && email) {
+    name = 'Candidato'
   }
 
   if (!name || !email) {
@@ -316,7 +323,7 @@ export async function GET() {
       required: ['job_id OU job_code'],
       optional: [
         'cv_base64, cv_filename, cv_mime_type — ou cv_url (HTTPS)',
-        'name, email, phone — se omitidos, use form_responses para inferência',
+        'name, email, respondent_email (alias), phone — se omitidos em parte, use form_responses para inferência',
         'form_responses OU form_submission: array de { question: string, answer: string }',
       ],
       job_code:

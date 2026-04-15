@@ -39,7 +39,7 @@ export function extractContactFromFormResponses(
   if (!found) {
     return {
       error:
-        'Não foi possível detectar um e-mail nas respostas. Use uma pergunta de e-mail no Google Forms ou envie os campos name e email no JSON.',
+        'Não foi possível detectar um e-mail nas respostas de texto. No Google Forms: ative "Recolher endereços de e-mail dos inquiridos" (o script Maverick envia esse e-mail no JSON), ou use pergunta de validação de e-mail, ou envie "email" / "respondent_email" no JSON.',
     }
   }
 
