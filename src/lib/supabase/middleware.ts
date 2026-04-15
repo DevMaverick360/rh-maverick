@@ -37,7 +37,9 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthPage = request.nextUrl.pathname === '/' || request.nextUrl.pathname === '/register'
   const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard')
-  const isPublicApi = request.nextUrl.pathname.startsWith('/api/')
+  /** Dashboard HTML redirect breaks Server Action POST responses (HTML vs flight). */
+  const isServerActionPost =
+    request.method === 'POST' && request.headers.has('next-action')
 
   // Redirect users to dashboard if they are logged in and trying to access auth pages
   if (user && isAuthPage) {
@@ -47,7 +49,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redirect users to login if they are NOT logged in and trying to access a protected route
-  if (!user && isDashboardRoute) {
+  if (!user && isDashboardRoute && !isServerActionPost) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone()
     url.pathname = '/'

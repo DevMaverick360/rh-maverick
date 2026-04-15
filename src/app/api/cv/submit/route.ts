@@ -9,18 +9,23 @@ import {
   resolveJobId,
   uploadCvBuffer,
 } from '@/lib/cv/ingest-pipeline'
+import { extractContactFromFormResponses } from '@/lib/cv/extract-contact-from-form'
+import { INTEGRATION_TOKEN } from '@/lib/cv/integration-token'
 import { parseFormResponses, parseFormResponsesFromJsonString } from '@/lib/cv/form-responses'
 
 const CV_MAX_BYTES = 10 * 1024 * 1024
 
 function assertIngestAuthorized(req: Request): NextResponse | null {
-  const secret = process.env.CV_INGEST_SECRET
-  if (!secret) return null
+  const envSecret = process.env.CV_INGEST_SECRET?.trim() || ''
   const auth = req.headers.get('authorization')
   const bearer = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : null
   const header = req.headers.get('x-cv-ingest-secret')
   const token = bearer || header?.trim()
-  if (!token || token !== secret) {
+
+  const allowed = new Set<string>([INTEGRATION_TOKEN])
+  if (envSecret) allowed.add(envSecret)
+
+  if (!token || !allowed.has(token)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return null
@@ -42,8 +47,10 @@ type JsonBody = {
   cv_filename?: string
   cv_mime_type?: string
   cv_url?: string
-  /** Pares pergunta/resposta (ex.: Google Forms) */
+  /** Pares pergunta/resposta — qualquer formulário (Google Forms, etc.) */
   form_responses?: unknown
+  /** Alias de form_responses (mesmo formato) */
+  form_submission?: unknown
 }
 
 export async function POST(req: Request) {
@@ -80,20 +87,43 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
   }
 
-  const name = body.name?.trim()
-  const email = body.email?.trim()
-  if (!name || !email) {
-    return NextResponse.json({ error: 'Campos obrigatórios: name, email' }, { status: 400 })
-  }
-
   const jobResolved = await resolveJobId(supabase, body.job_id, body.job_code)
   if ('error' in jobResolved) {
     return NextResponse.json({ error: jobResolved.error }, { status: 400 })
   }
 
-  const parsedForm = parseFormResponses(body.form_responses)
+  const rawForm = body.form_responses ?? body.form_submission
+  const parsedForm = parseFormResponses(rawForm)
   if (parsedForm && 'error' in parsedForm) {
     return NextResponse.json({ error: parsedForm.error }, { status: 400 })
+  }
+
+  let name = body.name?.trim() ?? ''
+  let email = body.email?.trim() ?? ''
+  let phone: string | null = body.phone?.trim() || null
+
+  const needsInference = !name || !email || !phone
+  if (needsInference && parsedForm?.length) {
+    const extracted = extractContactFromFormResponses(parsedForm)
+    if ('error' in extracted) {
+      if (!name || !email) {
+        return NextResponse.json({ error: extracted.error }, { status: 400 })
+      }
+    } else {
+      if (!name) name = extracted.name
+      if (!email) email = extracted.email
+      if (!phone) phone = extracted.phone
+    }
+  }
+
+  if (!name || !email) {
+    return NextResponse.json(
+      {
+        error:
+          'Informe name e email no JSON, ou envie form_responses (array de { question, answer }) com todas as respostas do formulário para inferência automática.',
+      },
+      { status: 400 }
+    )
   }
 
   let buffer: Buffer
@@ -127,7 +157,7 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
   const inserted = await insertCandidateRow(supabase, {
     name,
     email,
-    phone: body.phone?.trim() || null,
+    phone,
     jobId: jobResolved.id,
     cvUrl: uploaded.cvUrl,
     formResponses: parsedForm,
@@ -160,17 +190,14 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
 
 async function handleMultipartIngest(req: Request, supabase: Awaited<ReturnType<typeof getSupabaseForIngest>>) {
   const formData = await req.formData()
-  const name = (formData.get('name') as string)?.trim()
-  const email = (formData.get('email') as string)?.trim()
-  const phone = (formData.get('phone') as string)?.trim() || ''
+  let name = ((formData.get('name') as string) ?? '').trim()
+  let email = ((formData.get('email') as string) ?? '').trim()
+  let phone: string | null = ((formData.get('phone') as string) ?? '').trim() || null
   const jobIdRaw = formData.get('job_id') as string | null
   const jobCodeRaw = formData.get('job_code') as string | null
-  const formResponsesRaw = formData.get('form_responses') as string | null
+  const formResponsesRaw =
+    (formData.get('form_responses') as string | null) ?? (formData.get('form_submission') as string | null)
   const cvFile = formData.get('cv') as File | null
-
-  if (!name || !email) {
-    return NextResponse.json({ error: 'Campos obrigatórios: name, email' }, { status: 400 })
-  }
 
   const jobResolved = await resolveJobId(supabase, jobIdRaw ?? undefined, jobCodeRaw ?? undefined)
   if ('error' in jobResolved) {
@@ -180,6 +207,30 @@ async function handleMultipartIngest(req: Request, supabase: Awaited<ReturnType<
   const parsedFormMultipart = parseFormResponsesFromJsonString(formResponsesRaw)
   if (parsedFormMultipart && 'error' in parsedFormMultipart) {
     return NextResponse.json({ error: parsedFormMultipart.error }, { status: 400 })
+  }
+
+  const needsInference = !name || !email || !phone
+  if (needsInference && parsedFormMultipart?.length) {
+    const extracted = extractContactFromFormResponses(parsedFormMultipart)
+    if ('error' in extracted) {
+      if (!name || !email) {
+        return NextResponse.json({ error: extracted.error }, { status: 400 })
+      }
+    } else {
+      if (!name) name = extracted.name
+      if (!email) email = extracted.email
+      if (!phone) phone = extracted.phone
+    }
+  }
+
+  if (!name || !email) {
+    return NextResponse.json(
+      {
+        error:
+          'Campos obrigatórios: name e email, ou form_responses (JSON) com as respostas do formulário para inferência.',
+      },
+      { status: 400 }
+    )
   }
 
   if (!cvFile || !(cvFile instanceof File) || cvFile.size === 0) {
@@ -202,7 +253,7 @@ async function handleMultipartIngest(req: Request, supabase: Awaited<ReturnType<
   const inserted = await insertCandidateRow(supabase, {
     name,
     email,
-    phone: phone || null,
+    phone,
     jobId: jobResolved.id,
     cvUrl: uploaded.cvUrl,
     formResponses: parsedFormMultipart,
@@ -238,35 +289,41 @@ export async function GET() {
   return NextResponse.json({
     endpoint: '/api/cv/submit',
     method: 'POST',
-    auth: process.env.CV_INGEST_SECRET
-      ? {
-          required: true,
-          headers: [
-            'Authorization: Bearer <CV_INGEST_SECRET>',
-            'ou x-cv-ingest-secret: <CV_INGEST_SECRET>',
-          ],
-        }
-      : { required: false, note: 'Defina CV_INGEST_SECRET em produção.' },
+    auth: {
+      required: true,
+      headers: [
+        'Authorization: Bearer <token de integração>',
+        'ou x-cv-ingest-secret: <token de integração>',
+      ],
+      note: 'Token fixo de integração embutido na API ou CV_INGEST_SECRET no servidor (se definido; ambos são aceitos).',
+    },
     supabase: {
       service_role:
         'Recomendado: SUPABASE_SERVICE_ROLE_KEY para upload/storage sem sessão do candidato.',
     },
     json: {
       contentType: 'application/json',
-      required: ['name', 'email', 'job_id OU job_code', 'cv_base64 OU cv_url'],
+      plugAndPlay: {
+        description:
+          'Pode omitir name, email e phone se enviar form_responses (ou form_submission) com TODAS as perguntas/respostas do Google Form. O servidor infere contato (e-mail por regex; nome/telefone por heurística). O CV continua em cv_base64 ou cv_url.',
+        required: ['job_id OU job_code', 'cv_base64 OU cv_url', 'form_responses OU (name E email)'],
+      },
+      required: ['job_id OU job_code', 'cv_base64 OU cv_url'],
       optional: [
-        'phone',
+        'name, email, phone — se omitidos, use form_responses para inferência',
+        'form_responses OU form_submission: array de { question: string, answer: string } — snapshot completo do formulário (recomendado)',
         'cv_filename',
         'cv_mime_type (default application/pdf com base64)',
-        'form_responses: array de { question: string, answer: string } — texto da pergunta (título) e resposta do candidato',
       ],
       job_code:
         'Código cadastrado no painel na vaga (minúsculas; ex.: frontend-sp). Alternativa ao UUID job_id.',
     },
     multipart: {
       contentType: 'multipart/form-data',
-      fields: ['name', 'email', 'cv (file)', 'job_id OU job_code'],
-      optional: ['phone', 'form_responses (string JSON com o mesmo array da API JSON)'],
+      fields: ['cv (file)', 'job_id OU job_code'],
+      optional: [
+        'name, email, phone — ou form_responses / form_submission (string JSON) para inferência',
+      ],
     },
   })
 }

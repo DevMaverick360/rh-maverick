@@ -68,7 +68,8 @@
   <div class="wrap">
     <h1>Integração Google Forms → Maverick 360</h1>
     <p class="lead">
-      Documentação da API de candidaturas. Envie nome, e-mail, CV em base64, código da vaga e opcionalmente todas as perguntas e respostas do formulário.
+      Modo plug-and-play: envie <code>form_responses</code> com todas as perguntas/respostas (JSON), <code>cv_base64</code> e <code>job_code</code> ou <code>job_id</code>.
+      O servidor infere nome, e-mail e telefone (inclua uma resposta com e-mail válido). Opcionalmente envie <code>name</code> e <code>email</code> explícitos.
     </p>
 
     <h2>1. URL da API</h2>
@@ -115,9 +116,8 @@ RESEND_API_KEY=</pre>
 
     <h2>4. Corpo JSON</h2>
     <ul>
-      <li><strong>Obrigatórios:</strong> <code>name</code>, <code>email</code>, e <code>job_id</code> (UUID) <em>ou</em> <code>job_code</code></li>
-      <li><strong>CV:</strong> <code>cv_base64</code> + <code>cv_filename</code> ou <code>cv_url</code> (HTTPS)</li>
-      <li><strong>Opcional:</strong> <code>phone</code>, <code>form_responses</code> como array <code>[{ "question": "...", "answer": "..." }]</code></li>
+      <li><strong>Plug-and-play:</strong> <code>job_id</code> ou <code>job_code</code>, CV (<code>cv_base64</code> ou <code>cv_url</code>), <code>form_responses</code> ou <code>form_submission</code> — array <code>[{ "question": "...", "answer": "..." }]</code> com todas as respostas (exceto o arquivo, enviado em base64).</li>
+      <li><strong>Opcional explícito:</strong> <code>name</code>, <code>email</code>, <code>phone</code> (substituem ou complementam a inferência).</li>
     </ul>
     <div class="card">
       <div class="card-h">
@@ -125,57 +125,68 @@ RESEND_API_KEY=</pre>
         <button type="button" class="copy" data-copy-target="json-ex">Copiar</button>
       </div>
       <pre id="json-ex">{
-  "name": "Nome Completo",
-  "email": "email@exemplo.com",
-  "phone": "+55 11 99999-9999",
   "job_code": "frontend-sp-2025",
   "cv_base64": "&lt;BASE64_DO_PDF&gt;",
   "cv_filename": "curriculo.pdf",
   "cv_mime_type": "application/pdf",
   "form_responses": [
-    { "question": "Título da pergunta", "answer": "Resposta" }
+    { "question": "Qualquer pergunta", "answer": "Resposta" },
+    { "question": "E-mail", "answer": "candidato@exemplo.com" }
   ]
 }</pre>
     </div>
 
     <h2>5. Google Apps Script</h2>
-    <p>Gatilho: <strong>Ao enviar formulário</strong>. Ajuste <code>mapNamedFields_</code> aos títulos exatos das perguntas (nome, e-mail, upload de arquivo, etc.).</p>
+    <p>Gatilho: <strong>Ao enviar formulário</strong>. Script único: upload para o CV; demais campos viram <code>form_responses</code>. Ajuste <code>API_URL</code>, <code>INGEST_SECRET</code> e <code>JOB_CODE</code> (ou use a página Integração de cada vaga no painel).</p>
     <div class="card">
       <div class="card-h">
         <div><strong>Script modelo</strong></div>
         <button type="button" class="copy" data-copy-target="script">Copiar</button>
       </div>
       <pre id="script">/**
- * Formulário → Extensões → Apps Script
+ * Formulário → Extensões → Apps Script — plug-and-play
  * Gatilho: Ao enviar formulário → onFormSubmit
  */
 const API_URL = 'SUBSTITUA/api/cv/submit';
 const INGEST_SECRET = 'SUBSTITUA_PELO_SEGREDO';
 const JOB_CODE = 'codigo-da-vaga';
+const JOB_ID = '';
 
 function onFormSubmit(e) {
   var itemResponses = e.response.getItemResponses();
   var formResponses = [];
+  var cvBlob = null;
+  var cvName = 'curriculo.pdf';
+  var cvMime = 'application/pdf';
   for (var i = 0; i &lt; itemResponses.length; i++) {
     var ir = itemResponses[i];
-    var title = ir.getItem().getTitle();
-    var answer = formatAnswer_(ir.getResponse());
-    formResponses.push({ question: title, answer: answer });
+    var item = ir.getItem();
+    var type = item.getType();
+    var title = item.getTitle();
+    if (type === FormApp.ItemType.FILE_UPLOAD) {
+      var ids = ir.getResponse();
+      if (ids &amp;&amp; ids.length) {
+        var id0 = String(ids[0]);
+        var m = id0.match(/[-\w]{25,}/);
+        var fileId = m ? m[0] : id0;
+        var file = DriveApp.getFileById(fileId);
+        cvBlob = file.getBlob();
+        cvName = file.getName() || cvName;
+        cvMime = file.getMimeType() || cvMime;
+      }
+      continue;
+    }
+    formResponses.push({ question: title, answer: formatAnswer_(ir.getResponse()) });
   }
-  var named = mapNamedFields_(e.response);
-  var fileBlob = named.cvFile;
-  if (!fileBlob) throw new Error('Upload de arquivo (CV) não encontrado');
-  var b64 = Utilities.base64Encode(fileBlob.getBytes());
+  if (!cvBlob) throw new Error('Adicione pergunta de upload (CV)');
   var payload = {
-    name: named.name,
-    email: named.email,
-    phone: named.phone || '',
-    job_code: named.jobCode || JOB_CODE,
-    cv_base64: b64,
-    cv_filename: fileBlob.getName() || 'curriculo.pdf',
-    cv_mime_type: fileBlob.getContentType() || 'application/pdf',
+    cv_base64: Utilities.base64Encode(cvBlob.getBytes()),
+    cv_filename: cvName,
+    cv_mime_type: cvMime,
     form_responses: formResponses
   };
+  if (JOB_CODE) payload.job_code = JOB_CODE;
+  if (JOB_ID) payload.job_id = JOB_ID;
   var res = UrlFetchApp.fetch(API_URL, {
     method: 'post',
     contentType: 'application/json',
@@ -192,28 +203,6 @@ function formatAnswer_(resp) {
   if (resp == null) return '';
   if (Object.prototype.toString.call(resp) === '[object Array]') return resp.join(', ');
   return String(resp);
-}
-
-function mapNamedFields_(response) {
-  var items = response.getItemResponses();
-  var out = { name: '', email: '', phone: '', jobCode: '', cvFile: null };
-  for (var i = 0; i &lt; items.length; i++) {
-    var ir = items[i];
-    var title = ir.getItem().getTitle();
-    var type = ir.getItem().getType();
-    if (type === FormApp.ItemType.FILE_UPLOAD) {
-      var ids = ir.getResponse();
-      if (ids &amp;&amp; ids.length) out.cvFile = DriveApp.getFileById(ids[0]).getBlob();
-      continue;
-    }
-    var t = title.toLowerCase();
-    var val = formatAnswer_(ir.getResponse());
-    if (t.indexOf('nome') !== -1 &amp;&amp; t.indexOf('email') === -1) out.name = val;
-    else if (t.indexOf('email') !== -1) out.email = val;
-    else if (t.indexOf('telefone') !== -1 || t.indexOf('phone') !== -1) out.phone = val;
-    else if (t.indexOf('vaga') !== -1 || t.indexOf('código') !== -1) out.jobCode = val;
-  }
-  return out;
 }</pre>
     </div>
 

@@ -19,66 +19,79 @@ function useOrigin() {
 }
 
 const EXAMPLE_JSON = `{
-  "name": "Nome Completo do Candidato",
-  "email": "email@exemplo.com",
-  "phone": "+55 11 99999-9999",
   "job_code": "frontend-sp-2025",
   "cv_base64": "<BASE64_DO_PDF>",
   "cv_filename": "curriculo.pdf",
   "cv_mime_type": "application/pdf",
   "form_responses": [
-    { "question": "Título da pergunta no Google Form", "answer": "Resposta do candidato" }
+    { "question": "Qualquer pergunta", "answer": "Resposta livre" },
+    { "question": "E-mail", "answer": "candidato@exemplo.com" }
   ]
 }`
 
 const APPS_SCRIPT = `/**
- * Instalação: Formulário → Extensões → Apps Script
- * Preencha as constantes abaixo e adicione um gatilho "Ao enviar formulário".
+ * Plug-and-play: envia todas as respostas (exceto upload) em form_responses.
+ * O servidor infere nome/e-mail/telefone. Inclua pergunta de e-mail válido no form.
+ *
+ * Formulário → Extensões → Apps Script → cole → gatilho "Ao enviar formulário".
  */
 const API_URL = 'SUBSTITUA_PELA_URL_DO_SEU_SITE/api/cv/submit';
 const INGEST_SECRET = 'SUBSTITUA_PELO_CV_INGEST_SECRET';
-const JOB_CODE = 'codigo-da-vaga-no-painel'; // ou use campo oculto no form
+const JOB_CODE = 'codigo-da-vaga-no-painel';
+const JOB_ID = '';
 
 function onFormSubmit(e) {
-  const itemResponses = e.response.getItemResponses();
-  const formResponses = [];
+  var itemResponses = e.response.getItemResponses();
+  var formResponses = [];
+  var cvBlob = null;
+  var cvName = 'curriculo.pdf';
+  var cvMime = 'application/pdf';
+
   for (var i = 0; i < itemResponses.length; i++) {
     var ir = itemResponses[i];
-    var title = ir.getItem().getTitle();
-    var answer = formatAnswer(ir.getResponse());
-    formResponses.push({ question: title, answer: answer });
+    var item = ir.getItem();
+    var type = item.getType();
+    var title = item.getTitle();
+
+    if (type === FormApp.ItemType.FILE_UPLOAD) {
+      var ids = ir.getResponse();
+      if (ids && ids.length) {
+        var id0 = String(ids[0]);
+        var m = id0.match(/[-\\w]{25,}/);
+        var fileId = m ? m[0] : id0;
+        var file = DriveApp.getFileById(fileId);
+        cvBlob = file.getBlob();
+        cvName = file.getName() || cvName;
+        cvMime = file.getMimeType() || cvMime;
+      }
+      continue;
+    }
+    formResponses.push({ question: title, answer: formatAnswer(ir.getResponse()) });
   }
 
-  var named = mapNamedFields_(e.response);
-  var fileBlob = named.cvFile;
-  if (!fileBlob) {
-    throw new Error('Defina uma pergunta de upload de arquivo e ajuste mapNamedFields_');
+  if (!cvBlob) {
+    throw new Error('Adicione pergunta "Upload de arquivo" para o CV (PDF).');
   }
-  var bytes = fileBlob.getBytes();
-  var b64 = Utilities.base64Encode(bytes);
 
   var payload = {
-    name: named.name,
-    email: named.email,
-    phone: named.phone || '',
-    job_code: named.jobCode || JOB_CODE,
-    cv_base64: b64,
-    cv_filename: fileBlob.getName() || 'curriculo.pdf',
-    cv_mime_type: fileBlob.getContentType() || 'application/pdf',
+    cv_base64: Utilities.base64Encode(cvBlob.getBytes()),
+    cv_filename: cvName,
+    cv_mime_type: cvMime,
     form_responses: formResponses
   };
+  if (JOB_CODE) payload.job_code = JOB_CODE;
+  if (JOB_ID) payload.job_id = JOB_ID;
 
-  var options = {
+  var res = UrlFetchApp.fetch(API_URL, {
     method: 'post',
     contentType: 'application/json',
     payload: JSON.stringify(payload),
     muteHttpExceptions: true,
-    headers: { 'Authorization': 'Bearer ' + INGEST_SECRET }
-  };
-
-  var res = UrlFetchApp.fetch(API_URL, options);
-  if (res.getResponseCode() < 200 || res.getResponseCode() >= 300) {
-    throw new Error('API: ' + res.getResponseCode() + ' ' + res.getContentText());
+    headers: { Authorization: 'Bearer ' + INGEST_SECRET }
+  });
+  var code = res.getResponseCode();
+  if (code < 200 || code >= 300) {
+    throw new Error('API ' + code + ': ' + res.getContentText());
   }
 }
 
@@ -88,33 +101,6 @@ function formatAnswer(resp) {
     return resp.join(', ');
   }
   return String(resp);
-}
-
-/**
- * Ajuste os títulos das perguntas do seu formulário (exatamente como no Google Form).
- */
-function mapNamedFields_(response) {
-  var items = response.getItemResponses();
-  var out = { name: '', email: '', phone: '', jobCode: '', cvFile: null };
-  for (var i = 0; i < items.length; i++) {
-    var ir = items[i];
-    var title = ir.getItem().getTitle();
-    var type = ir.getItem().getType();
-    if (type === FormApp.ItemType.FILE_UPLOAD) {
-      var ids = ir.getResponse();
-      if (ids && ids.length) {
-        out.cvFile = DriveApp.getFileById(ids[0]).getBlob();
-      }
-      continue;
-    }
-    var t = title.toLowerCase();
-    var val = formatAnswer(ir.getResponse());
-    if (t.indexOf('nome') !== -1 && t.indexOf('email') === -1) out.name = val;
-    else if (t.indexOf('email') !== -1) out.email = val;
-    else if (t.indexOf('telefone') !== -1 || t.indexOf('phone') !== -1) out.phone = val;
-    else if (t.indexOf('job') !== -1 || t.indexOf('vaga') !== -1 || t.indexOf('código') !== -1) out.jobCode = val;
-  }
-  return out;
 }`
 
 const CURL_EXAMPLE = `curl -sS -X POST "https://SEU_DOMINIO/api/cv/submit" \\
@@ -164,8 +150,9 @@ RESEND_API_KEY=`
               <h1 className="text-2xl font-bold tracking-tight">Google Forms → Painel</h1>
             )}
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              Envie candidaturas com CV e respostas do formulário para a API. O candidato aparece no painel com
-              notas e feedback da IA.
+              Modo recomendado: <code className="text-xs">form_responses</code> com todas as perguntas + CV em base64;
+              nome, e-mail e telefone são inferidos no servidor. Em cada vaga use a página <strong>Google Forms</strong>{' '}
+              (script já com <code className="text-xs">job_code</code>).
             </p>
           </div>
         </div>
@@ -212,27 +199,29 @@ RESEND_API_KEY=`
         <h2 className="text-lg font-bold">4. Corpo JSON (campos)</h2>
         <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
           <li>
-            <strong>Obrigatórios:</strong> <code className="text-xs">name</code>, <code className="text-xs">email</code>
-            , <code className="text-xs">job_id</code> (UUID) <em>ou</em> <code className="text-xs">job_code</code>{' '}
-            (código da vaga no painel)
+            <strong>Plug-and-play:</strong> <code className="text-xs">job_id</code> ou <code className="text-xs">job_code</code>,{' '}
+            <code className="text-xs">cv_base64</code> (ou <code className="text-xs">cv_url</code>) e{' '}
+            <code className="text-xs">form_responses</code> (ou <code className="text-xs">form_submission</code>) — array{' '}
+            <code className="text-xs">{'{ question, answer }'}</code> com <em>todas</em> as respostas do formulário. Inclua
+            pelo menos uma resposta com e-mail válido.
           </li>
           <li>
-            <strong>CV:</strong> <code className="text-xs">cv_base64</code> + <code className="text-xs">cv_filename</code>{' '}
-            ou <code className="text-xs">cv_url</code> (HTTPS)
+            <strong>Opcional explícito:</strong> <code className="text-xs">name</code>, <code className="text-xs">email</code>,{' '}
+            <code className="text-xs">phone</code> — se enviados, têm prioridade sobre a inferência.
           </li>
-          <li>
-            <strong>Opcional:</strong> <code className="text-xs">phone</code>,{' '}
-            <code className="text-xs">form_responses</code> (array de pergunta/resposta)
-          </li>
+          <li>Você também pode enviar só <code className="text-xs">name</code>, <code className="text-xs">email</code> e{' '}
+            <code className="text-xs">form_responses</code> como contexto extra (sem inferência de e-mail nas respostas).</li>
         </ul>
-        <CopyBlock label="Exemplo de JSON" value={EXAMPLE_JSON} multiline />
+        <CopyBlock label="Exemplo de JSON (inferência)" value={EXAMPLE_JSON} multiline />
       </section>
 
       <section className="space-y-4">
         <h2 className="text-lg font-bold">5. Google Apps Script</h2>
         <p className="text-sm text-muted-foreground">
-          Cole no editor do formulário, ajuste títulos das perguntas em <code className="text-xs">mapNamedFields_</code>,
-          crie o gatilho &quot;Ao enviar formulário&quot; e autorize o acesso ao Drive (upload de arquivo).
+          Um único script: pergunta de upload para o CV; demais perguntas viram JSON. Ajuste só{' '}
+          <code className="text-xs">API_URL</code>, <code className="text-xs">INGEST_SECRET</code> e{' '}
+          <code className="text-xs">JOB_CODE</code> (ou <code className="text-xs">JOB_ID</code>). Gatilho: &quot;Ao enviar
+          formulário&quot;.
         </p>
         <CopyBlock label="Script completo (modelo)" value={APPS_SCRIPT} multiline />
       </section>

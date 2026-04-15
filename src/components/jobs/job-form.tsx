@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createJob, updateJob } from '@/app/actions/jobs'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,22 +22,42 @@ interface JobFormProps {
 
 export function JobForm({ initialData }: JobFormProps) {
   const isEditing = !!initialData
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(formData: FormData) {
+  /** `fetch` para Route Handlers — evita o protocolo de Server Actions que falha no Next 16 + Turbopack. */
+  async function submitViaApi(formData: FormData) {
     setLoading(true)
     setError(null)
-
-    let result
-    if (isEditing) {
-      result = await updateJob(initialData.id, formData)
-    } else {
-      result = await createJob(formData)
-    }
-    
-    if (result?.error) {
-      setError(result.error)
+    try {
+      const url = isEditing
+        ? `/api/dashboard/jobs/${encodeURIComponent(initialData!.id)}`
+        : '/api/dashboard/jobs'
+      const res = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
+        body: formData,
+        credentials: 'same-origin',
+      })
+      let data: { error?: string; success?: boolean; id?: string }
+      try {
+        data = (await res.json()) as { error?: string; success?: boolean; id?: string }
+      } catch {
+        setError('Resposta inválida do servidor.')
+        return
+      }
+      if (!res.ok || data.error) {
+        setError(data.error ?? `Erro ao salvar (${res.status})`)
+        return
+      }
+      if (data.success) {
+        if (!isEditing && data.id) {
+          router.push(`/dashboard/jobs/${data.id}/integracao`)
+        } else {
+          router.push('/dashboard/jobs')
+        }
+      }
+    } finally {
       setLoading(false)
     }
   }
@@ -66,7 +86,14 @@ export function JobForm({ initialData }: JobFormProps) {
         </div>
       </div>
 
-      <form action={handleSubmit} className="space-y-6">
+      <form
+        className="space-y-6"
+        onSubmit={(e) => {
+          e.preventDefault()
+          const formData = new FormData(e.currentTarget)
+          void submitViaApi(formData)
+        }}
+      >
         {/* Step 1 — Info Geral */}
         <div className="rounded-2xl border border-border/60 bg-white shadow-sm overflow-hidden">
           <div className="flex items-center gap-3 px-6 py-4 border-b border-border/40 bg-[#FAFAFA]">
@@ -84,7 +111,7 @@ export function JobForm({ initialData }: JobFormProps) {
               <Input
                 id="title"
                 name="title"
-                defaultValue={initialData?.title}
+                defaultValue={initialData?.title ?? ''}
                 required
                 placeholder="Ex: Senior Frontend Engineer"
                 className="h-11 rounded-lg border-border px-4 text-sm transition-colors focus:border-[#0B0B0B]"
@@ -115,7 +142,7 @@ export function JobForm({ initialData }: JobFormProps) {
               <Textarea
                 id="description"
                 name="description"
-                defaultValue={initialData?.description}
+                defaultValue={initialData?.description ?? ''}
                 placeholder="Descreva as responsabilidades, o dia-a-dia, benefícios e requisitos gerais da vaga..."
                 className="min-h-[120px] rounded-lg border-border px-4 py-3 text-sm resize-none transition-colors focus:border-[#0B0B0B]"
               />
@@ -147,7 +174,7 @@ export function JobForm({ initialData }: JobFormProps) {
                 <Textarea
                   id="technical_criteria"
                   name="technical_criteria"
-                  defaultValue={initialData?.technical_criteria}
+                  defaultValue={initialData?.technical_criteria ?? ''}
                   required
                   placeholder={"- React.js avançado\n- TypeScript\n- Arquitetura de micro-frontends\n- Experiência com testes E2E\n- CI/CD"}
                   className="min-h-[180px] rounded-lg border-border px-4 py-3 text-sm resize-none transition-colors focus:border-[#0066FF] font-mono"
@@ -164,7 +191,7 @@ export function JobForm({ initialData }: JobFormProps) {
                 <Textarea
                   id="cultural_criteria"
                   name="cultural_criteria"
-                  defaultValue={initialData?.cultural_criteria}
+                  defaultValue={initialData?.cultural_criteria ?? ''}
                   required
                   placeholder={"- Proatividade e autonomia\n- Fit com trabalho assíncrono\n- Perfil hands-on\n- Boa comunicação escrita\n- Mentalidade de growth"}
                   className="min-h-[180px] rounded-lg border-border px-4 py-3 text-sm resize-none transition-colors focus:border-[#FF3B3B] font-mono"

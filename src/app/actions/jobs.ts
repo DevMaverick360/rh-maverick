@@ -1,49 +1,45 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { jobPayloadFromFormData } from '@/lib/jobs/job-payload'
 
-function parseApplicationCode(raw: FormDataEntryValue | null): string | null {
-  const s = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
-  return s || null
-}
+export type JobFormState = { error: string } | { success: true } | null
 
-export async function createJob(formData: FormData) {
+/** Preferir `POST /api/dashboard/jobs` a partir do cliente (evita bug de Server Actions + Turbopack). */
+export async function createJob(formData: FormData): Promise<JobFormState> {
   const supabase = await createClient()
 
-  const data = {
-    title: formData.get('title') as string,
-    description: formData.get('description') as string,
-    cultural_criteria: formData.get('cultural_criteria') as string,
-    technical_criteria: formData.get('technical_criteria') as string,
-    application_code: parseApplicationCode(formData.get('application_code')),
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    return { error: 'Sessão expirada. Faça login novamente.' }
   }
 
-  const { error } = await supabase.from('jobs').insert(data)
+  const { error } = await supabase.from('jobs').insert(jobPayloadFromFormData(formData))
 
   if (error) {
     return { error: error.message }
   }
 
   revalidatePath('/dashboard/jobs')
-  redirect('/dashboard/jobs')
+  return { success: true }
 }
 
-export async function updateJob(id: string, formData: FormData) {
+export async function updateJob(id: string, formData: FormData): Promise<JobFormState> {
   const supabase = await createClient()
 
-  const data = {
-    title: formData.get('title') as string,
-    description: formData.get('description') as string,
-    cultural_criteria: formData.get('cultural_criteria') as string,
-    technical_criteria: formData.get('technical_criteria') as string,
-    application_code: parseApplicationCode(formData.get('application_code')),
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    return { error: 'Sessão expirada. Faça login novamente.' }
   }
 
   const { error } = await supabase
     .from('jobs')
-    .update(data)
+    .update(jobPayloadFromFormData(formData))
     .eq('id', id)
 
   if (error) {
@@ -51,7 +47,15 @@ export async function updateJob(id: string, formData: FormData) {
   }
 
   revalidatePath('/dashboard/jobs')
-  redirect('/dashboard/jobs')
+  return { success: true }
+}
+
+export async function updateJobForm(formData: FormData): Promise<JobFormState> {
+  const id = String(formData.get('job_id') ?? '').trim()
+  if (!id) {
+    return { error: 'ID da vaga ausente.' }
+  }
+  return updateJob(id, formData)
 }
 
 export async function deleteJob(id: string) {
