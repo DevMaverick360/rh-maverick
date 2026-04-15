@@ -25,18 +25,58 @@ function buildAppsScript(apiUrl: string, job: JobIntegrationJob): string {
  * Maverick — envio automático ao receber resposta do Google Formulário
  * Vaga: ${safeTitle}
  *
+ * IMPORTANTE — Gatilho INSTALÁVEL (obrigatório):
+ * A função reservada "onFormSubmit" usa gatilho SIMPLES do Google: ela NÃO pode chamar a internet (UrlFetchApp).
+ * Por isso as respostas gravam no Form, mas a API não recebe nada. Use SEMPRE a função aposEnviarFormularioMaverick
+ * com um gatilho INSTALÁVEL (passos abaixo).
+ *
  * Como usar:
- * 1) Abra o formulário → Extensões → Apps Script → apague o conteúdo e cole este arquivo inteiro.
- * 2) Salve o projeto (ícone de disquete).
- * 3) À esquerda, ícone de relógio (Gatilhos) → Adicionar gatilho → função "onFormSubmit" →
- *    evento "Ao enviar formulário" → Salvar → autorize quando o Google pedir (acesso ao Drive para ler o anexo do CV).
+ * 1) Formulário → Extensões → Apps Script → cole este arquivo → Salvar.
+ * 2) Ícone de relógio (Gatilhos) → Adicionar gatilho:
+ *    - função: aposEnviarFormularioMaverick
+ *    - origem do evento: Do formulário
+ *    - tipo de evento: Ao enviar o formulário
+ *    → Salvar → autorize (Drive + conexões externas).
+ * 3) Teste enviando o formulário pelo link público.
+ *
+ * Teste pelo editor (▶): função testarComUltimaResposta — após existir pelo menos 1 envio pelo form.
  */
 const ENDERECO_API = ${JSON.stringify(apiUrl)};
 const TOKEN_INTEGRACAO = ${JSON.stringify(INTEGRATION_TOKEN)};
 ${jobBlock}
 
-function onFormSubmit(e) {
-  var itemResponses = e.response.getItemResponses();
+/**
+ * Use APENAS com gatilho INSTALÁVEL "Ao enviar o formulário" → esta função.
+ * (Não renomeie para onFormSubmit — o Google bloqueia HTTP no gatilho simples dessa função.)
+ */
+function aposEnviarFormularioMaverick(e) {
+  if (!e || !e.response) {
+    throw new Error(
+      'Configure o gatilho instalável "Ao enviar o formulário" em aposEnviarFormularioMaverick. ' +
+      'Para teste manual no editor, use testarComUltimaResposta().'
+    );
+  }
+  enviarParaMaverickComResposta_(e.response);
+}
+
+/**
+ * Teste manual no editor: selecione esta função no menu e clique Executar (▶).
+ * Exige pelo menos uma resposta já enviada pelo link do formulário.
+ */
+function testarComUltimaResposta() {
+  var form = FormApp.getActiveForm();
+  if (!form) {
+    throw new Error('Abra o script pelo formulário: Formulário → Extensões → Apps Script.');
+  }
+  var todas = form.getResponses();
+  if (!todas.length) {
+    throw new Error('Envie uma resposta pelo link do Google Formulário primeiro; depois rode testarComUltimaResposta de novo.');
+  }
+  enviarParaMaverickComResposta_(todas[todas.length - 1]);
+}
+
+function enviarParaMaverickComResposta_(response) {
+  var itemResponses = response.getItemResponses();
   var respostas = [];
   var arquivoCv = null;
   var nomeArquivo = 'curriculo.pdf';
@@ -163,11 +203,22 @@ export function JobGoogleFormsIntegration({ job }: { job: JobIntegrationJob }) {
             cole o script completo da seção 2 (o token de integração já vem no script) → salve.
           </li>
           <li>
-            No Apps Script: menu à esquerda <strong>Relógio</strong> (Gatilhos) → <strong>Adicionar gatilho</strong> →
-            escolha a função <code className="text-xs font-mono">onFormSubmit</code> → evento{' '}
-            <strong>Ao enviar formulário</strong> → salve e autorize o acesso ao Google Drive quando solicitado.
+            <strong>Gatilho instalável (obrigatório):</strong> no Apps Script, <strong>Relógio</strong> →{' '}
+            <strong>Adicionar gatilho</strong> → função <code className="text-xs font-mono">aposEnviarFormularioMaverick</code>{' '}
+            → origem <strong>Do formulário</strong> → evento <strong>Ao enviar o formulário</strong> → salvar e
+            autorizar. Sem isso, o Google só grava a resposta no Form e <strong>não chama a API</strong> (limitação do
+            gatilho simples <code className="text-xs font-mono">onFormSubmit</code>).
           </li>
-          <li>Faça um envio de teste e confira se a candidatura apareceu no Maverick.</li>
+          <li>
+            <strong>Teste pelo formulário:</strong> envie pelo link público; o gatilho deve executar{' '}
+            <code className="text-xs font-mono">aposEnviarFormularioMaverick</code>.
+          </li>
+          <li>
+            <strong>Teste pelo editor (▶):</strong> após um envio real, rode{' '}
+            <code className="text-xs font-mono">testarComUltimaResposta</code> (não use ▶ em{' '}
+            <code className="text-xs font-mono">aposEnviarFormularioMaverick</code>).
+          </li>
+          <li>Confira no Maverick se a candidatura apareceu.</li>
         </ol>
       </section>
 

@@ -30,17 +30,21 @@ const EXAMPLE_JSON = `{
 }`
 
 const APPS_SCRIPT = `/**
- * Plug-and-play: envia todas as respostas (exceto upload) em form_responses.
- * O servidor infere nome/e-mail/telefone. Inclua pergunta de e-mail válido no form.
+ * Plug-and-play: form_responses + CV. Gatilho INSTALÁVEL obrigatório.
+ * NÃO use a função reservada onFormSubmit — o Google a trata como gatilho SIMPLES e bloqueia UrlFetchApp
+ * (o form grava respostas, mas a API nunca é chamada).
  *
- * Formulário → Extensões → Apps Script → cole → gatilho "Ao enviar formulário".
+ * Relógio → Adicionar gatilho → função aposEnviarFormularioMaverick → Do formulário → Ao enviar o formulário.
  */
 const API_URL = 'SUBSTITUA_PELA_URL_DO_SEU_SITE/api/cv/submit';
 const INGEST_SECRET = 'SUBSTITUA_PELO_CV_INGEST_SECRET';
 const JOB_CODE = 'codigo-da-vaga-no-painel';
 const JOB_ID = '';
 
-function onFormSubmit(e) {
+function aposEnviarFormularioMaverick(e) {
+  if (!e || !e.response) {
+    throw new Error('Configure gatilho instalável em aposEnviarFormularioMaverick (não use onFormSubmit).');
+  }
   var itemResponses = e.response.getItemResponses();
   var formResponses = [];
   var cvBlob = null;
@@ -218,10 +222,11 @@ RESEND_API_KEY=`
       <section className="space-y-4">
         <h2 className="text-lg font-bold">5. Google Apps Script</h2>
         <p className="text-sm text-muted-foreground">
-          Um único script: pergunta de upload para o CV; demais perguntas viram JSON. Ajuste só{' '}
+          Gatilho <strong>instalável</strong>: função <code className="text-xs">aposEnviarFormularioMaverick</code>, origem{' '}
+          <strong>Do formulário</strong>, evento <strong>Ao enviar o formulário</strong>. Não use{' '}
+          <code className="text-xs">onFormSubmit</code> — o gatilho simples não permite HTTP à API. Ajuste{' '}
           <code className="text-xs">API_URL</code>, <code className="text-xs">INGEST_SECRET</code> e{' '}
-          <code className="text-xs">JOB_CODE</code> (ou <code className="text-xs">JOB_ID</code>). Gatilho: &quot;Ao enviar
-          formulário&quot;.
+          <code className="text-xs">JOB_CODE</code>.
         </p>
         <CopyBlock label="Script completo (modelo)" value={APPS_SCRIPT} multiline />
       </section>

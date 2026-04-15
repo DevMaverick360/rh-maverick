@@ -137,22 +137,23 @@ RESEND_API_KEY=</pre>
     </div>
 
     <h2>5. Google Apps Script</h2>
-    <p>Gatilho: <strong>Ao enviar formulário</strong>. Script único: upload para o CV; demais campos viram <code>form_responses</code>. Ajuste <code>API_URL</code>, <code>INGEST_SECRET</code> e <code>JOB_CODE</code> (ou use a página Integração de cada vaga no painel).</p>
+    <p><strong>Gatilho instalável obrigatório:</strong> função <code>aposEnviarFormularioMaverick</code>, origem <strong>Do formulário</strong>, evento <strong>Ao enviar o formulário</strong>. Não use <code>onFormSubmit</code> — o gatilho simples bloqueia <code>UrlFetchApp</code> (respostas gravam no Form, a API não recebe).</p>
     <div class="card">
       <div class="card-h">
         <div><strong>Script modelo</strong></div>
         <button type="button" class="copy" data-copy-target="script">Copiar</button>
       </div>
       <pre id="script">/**
- * Formulário → Extensões → Apps Script — plug-and-play
- * Gatilho: Ao enviar formulário → onFormSubmit
+ * Gatilho INSTALÁVEL: aposEnviarFormularioMaverick — Do formulário — Ao enviar o formulário.
+ * Evite onFormSubmit (gatilho simples não permite UrlFetchApp).
  */
 const API_URL = 'SUBSTITUA/api/cv/submit';
 const INGEST_SECRET = 'SUBSTITUA_PELO_SEGREDO';
 const JOB_CODE = 'codigo-da-vaga';
 const JOB_ID = '';
 
-function onFormSubmit(e) {
+function aposEnviarFormularioMaverick(e) {
+  if (!e || !e.response) throw new Error('Gatilho instalável obrigatório em aposEnviarFormularioMaverick.');
   var itemResponses = e.response.getItemResponses();
   var formResponses = [];
   var cvBlob = null;
