@@ -184,7 +184,7 @@ export function CandidateDetailView({ candidate }: { candidate: CandidateDetailD
                 <div className="flex flex-col gap-2">
                   <span className="font-semibold">{candidate.jobs.title}</span>
                   <Button variant="link" className="h-auto p-0 text-xs text-[#7C3AED] justify-start" asChild>
-                    <Link href={`/dashboard/jobs/${candidate.jobs.id}/edit`}>Abrir vaga no painel</Link>
+                    <Link href={`/dashboard/jobs/${candidate.jobs.id}`}>Ver painel da vaga</Link>
                   </Button>
                 </div>
               ) : (
@@ -219,10 +219,7 @@ export function CandidateDetailView({ candidate }: { candidate: CandidateDetailD
                 <p className="text-xs text-muted-foreground">Critérios da vaga vs. CV e respostas do formulário.</p>
               </div>
             </div>
-            <CandidateAiRerunButton
-              candidateId={candidate.id}
-              disabled={!candidate.job_id}
-            />
+            <CandidateAiRerunButton candidateId={String(candidate.id)} disabled={!candidate.job_id} />
           </div>
           <div className="p-5 space-y-5">
             {aiPending && (

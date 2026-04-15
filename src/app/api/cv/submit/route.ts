@@ -8,6 +8,7 @@ import {
   processCandidateAI,
   resolveJobId,
   uploadCvBuffer,
+  cvSupportedForAiAnalysis,
 } from '@/lib/cv/ingest-pipeline'
 import {
   extractContactFromFormResponses,
@@ -164,6 +165,15 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
 
   let cvUrl: string | null = null
   if (buffer && buffer.length > 0) {
+    if (!cvSupportedForAiAnalysis(mimeType, fileName)) {
+      return NextResponse.json(
+        {
+          error:
+            'CV não suportado para análise de IA. Envie PDF ou Word (.doc, .docx). Defina cv_filename com extensão correta (ex.: candidato.docx) se cv_mime_type for genérico.',
+        },
+        { status: 400 }
+      )
+    }
     const uploaded = await uploadCvBuffer(supabase, buffer, fileName, mimeType)
     if ('error' in uploaded) {
       return NextResponse.json({ error: uploaded.error }, { status: 500 })
@@ -192,7 +202,8 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
     mimeType,
     cvUrl,
     jobResolved.id,
-    parsedForm
+    parsedForm,
+    fileName
   )
 
   return NextResponse.json(
@@ -277,6 +288,15 @@ async function handleMultipartIngest(req: Request, supabase: Awaited<ReturnType<
 
   let cvUrl: string | null = null
   if (buffer && buffer.length > 0) {
+    if (!cvSupportedForAiAnalysis(mimeType, fileName)) {
+      return NextResponse.json(
+        {
+          error:
+            'CV não suportado para análise de IA. Envie PDF ou Word (.doc, .docx) com extensão correta no nome do ficheiro.',
+        },
+        { status: 400 }
+      )
+    }
     const uploaded = await uploadCvBuffer(supabase, buffer, fileName, mimeType)
     if ('error' in uploaded) {
       return NextResponse.json({ error: uploaded.error }, { status: 500 })
@@ -305,7 +325,8 @@ async function handleMultipartIngest(req: Request, supabase: Awaited<ReturnType<
     mimeType,
     cvUrl,
     jobResolved.id,
-    parsedFormMultipart
+    parsedFormMultipart,
+    fileName
   )
 
   return NextResponse.json(
@@ -344,7 +365,7 @@ export async function GET() {
       },
       required: ['job_id OU job_code'],
       optional: [
-        'cv_base64, cv_filename, cv_mime_type — ou cv_url (HTTPS)',
+        'cv_base64, cv_filename, cv_mime_type — ou cv_url (HTTPS). Análise de IA: PDF, Word .doc / .docx (e .txt); use cv_filename com extensão correta se o MIME for genérico.',
         'name, email, respondent_email (alias), phone — se omitidos em parte, use form_responses para inferência',
         'form_responses OU form_submission: array de { question: string, answer: string }',
       ],
@@ -355,7 +376,7 @@ export async function GET() {
       contentType: 'multipart/form-data',
       fields: ['job_id OU job_code'],
       optional: [
-        'cv (file) — opcional',
+        'cv (file) — opcional; PDF ou Word (.doc, .docx) para análise de IA',
         'name, email, phone — ou form_responses / form_submission (string JSON) para inferência',
       ],
     },

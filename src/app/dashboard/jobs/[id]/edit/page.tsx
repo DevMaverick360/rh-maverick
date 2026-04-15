@@ -36,7 +36,13 @@ export default async function EditJobPage({ params }: PageProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-4">
+        <Link
+          href={`/dashboard/jobs/${job.id}`}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-foreground hover:underline"
+        >
+          Painel da vaga (candidatos)
+        </Link>
         <Link
           href={`/dashboard/jobs/${job.id}/integracao`}
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#7C3AED] hover:underline"

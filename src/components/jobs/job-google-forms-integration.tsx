@@ -121,7 +121,7 @@ function enviarParaMaverickComResposta_(response) {
 
   if (!arquivoCv && !respostas.length) {
     throw new Error(
-      'Inclua perguntas no formulário (ex.: e-mail do candidato) ou uma pergunta "Upload de arquivo" com PDF. ' +
+      'Inclua perguntas no formulário (ex.: e-mail do candidato) ou uma pergunta "Upload de arquivo" com PDF ou Word (.doc, .docx). ' +
       'A API precisa de respostas ou de um CV para registar a candidatura.'
     );
   }
@@ -166,7 +166,7 @@ function formatarResposta(resp) {
 const ORIENTACAO_FORMULARIO = `O que o formulário precisa ter:
 
 • E-mail do candidato: em Definições do formulário pode usar "Recolher endereços de e-mail dos inquiridos" (o script envia automaticamente) e/ou pergunta "Validação de e-mail".
-• Opcional: pergunta "Upload de arquivo" (clip) para o currículo em PDF. Links numa caixa de texto não substituem o upload.
+• Opcional: pergunta "Upload de arquivo" (clip) para o currículo em PDF ou Word (.doc, .docx). Links numa caixa de texto não substituem o upload.
 • Outras perguntas (texto, múltipla escolha, etc.) — aparecem no Maverick em form_responses.
 
 Sem upload, o Maverick regista a candidatura só com as respostas (a IA avalia com base no formulário). Com upload, o ficheiro é anexado. Quem anexa ficheiros precisa de sessão Google.`

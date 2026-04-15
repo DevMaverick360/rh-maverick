@@ -4,7 +4,6 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { rerunCandidateAiAnalysisAction } from '@/app/actions/candidates'
 
 export function CandidateAiRerunButton({
   candidateId,
@@ -21,9 +20,19 @@ export function CandidateAiRerunButton({
   function run() {
     setFeedback(null)
     startTransition(async () => {
-      const res = await rerunCandidateAiAnalysisAction(candidateId)
-      if ('error' in res) {
-        setFeedback({ kind: 'err', text: res.error })
+      const res = await fetch(`/api/dashboard/candidates/${encodeURIComponent(candidateId)}/rerun-ai`, {
+        method: 'POST',
+        credentials: 'same-origin',
+      })
+      let body: { ok?: boolean; error?: string } = {}
+      try {
+        body = (await res.json()) as { ok?: boolean; error?: string }
+      } catch {
+        setFeedback({ kind: 'err', text: 'Resposta inválida do servidor.' })
+        return
+      }
+      if (!res.ok) {
+        setFeedback({ kind: 'err', text: body.error ?? `Erro ${res.status}` })
         return
       }
       setFeedback({ kind: 'ok', text: 'Análise concluída com os critérios atuais da vaga.' })

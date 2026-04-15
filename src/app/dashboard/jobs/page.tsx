@@ -7,7 +7,7 @@ import {
   CardTitle,
   CardFooter
 } from "@/components/ui/card";
-import { Plus, Edit, Briefcase, FileSpreadsheet } from "lucide-react";
+import { Plus, Edit, Briefcase, FileSpreadsheet, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { JobDeleteButton } from "@/components/jobs/job-delete-button";
@@ -67,6 +67,12 @@ export default async function JobsPage() {
               </div>
             </CardContent>
             <CardFooter className="bg-[#F5F5F5]/60 border-t border-border/40 flex flex-wrap items-center justify-end gap-2 px-5 py-3">
+              <Button size="sm" variant="default" className="h-8 rounded-lg text-xs font-semibold bg-[#0B0B0B] hover:bg-[#1a1a1a]" asChild>
+                <Link href={`/dashboard/jobs/${job.id}`}>
+                  <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
+                  Painel
+                </Link>
+              </Button>
               <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs font-semibold" asChild>
                 <Link href={`/dashboard/jobs/${job.id}/integracao`}>
                   <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />

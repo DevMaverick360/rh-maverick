@@ -1,3 +1,6 @@
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { analyzeCVWithAI } from '@/lib/openai/analyze'
 import { sendCandidateEmail } from '@/lib/email/send'
@@ -39,16 +42,93 @@ export async function resolveJobId(
   return { error: 'Informe job_id (UUID) ou job_code da vaga' }
 }
 
-async function extractCvText(buffer: Buffer, mimeType: string): Promise<string> {
+function fileExtensionLower(name: string | null | undefined): string {
+  if (!name?.trim()) return ''
+  const base = name.split('/').pop() ?? name
+  const dot = base.lastIndexOf('.')
+  return dot >= 0 ? base.slice(dot + 1).toLowerCase().trim() : ''
+}
+
+/** PDF, Word (.doc / .docx) ou texto simples (.txt) — usado na validação e na extração para a IA. */
+function cvFormatForExtraction(mimeType: string, originalFileName?: string | null): 'pdf' | 'word' | 'text' | null {
   const mt = mimeType.toLowerCase()
-  if (mt === 'application/pdf' || mt.endsWith('/pdf')) {
-    const p = await import('pdf-parse')
-    // pdf-parse: default vs namespace export varies by bundler
-    const pdfParse = (p as { default?: (b: Buffer) => Promise<{ text: string }> }).default ?? (p as unknown as (b: Buffer) => Promise<{ text: string }>)
-    const pdfData = await pdfParse(buffer)
-    return pdfData.text || ''
+  const ext = fileExtensionLower(originalFileName)
+
+  if (mt === 'application/pdf' || mt.endsWith('/pdf') || ext === 'pdf') return 'pdf'
+
+  if (
+    mt === 'application/msword' ||
+    mt === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mt.includes('wordprocessingml') ||
+    ext === 'doc' ||
+    ext === 'docx'
+  ) {
+    return 'word'
   }
-  return buffer.toString('utf-8')
+
+  if (mt.startsWith('text/plain') || ext === 'txt') return 'text'
+
+  return null
+}
+
+export function cvSupportedForAiAnalysis(mimeType: string, originalFileName?: string | null): boolean {
+  return cvFormatForExtraction(mimeType, originalFileName) !== null
+}
+
+let pdfjsWorkerTried = false
+
+/** pdfjs no Next/Turbopack: apontar o worker para o ficheiro real em node_modules (evita "fake worker" com path em .next). */
+function ensurePdfjsWorker(PDFParse: { setWorker: (src?: string) => string }): void {
+  if (pdfjsWorkerTried) return
+  pdfjsWorkerTried = true
+  try {
+    const require = createRequire(join(process.cwd(), 'package.json'))
+    const workerPath = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')
+    PDFParse.setWorker(pathToFileURL(workerPath).href)
+  } catch {
+    // Mantém o default do pdfjs; pode falhar noutros ambientes
+  }
+}
+
+async function extractCvText(
+  buffer: Buffer,
+  mimeType: string,
+  originalFileName?: string | null
+): Promise<string> {
+  const kind = cvFormatForExtraction(mimeType, originalFileName)
+
+  if (kind === 'pdf') {
+    // pdf-parse v2+: named export PDFParse + getText(); v1 was default(buffer) — not compatible
+    const mod = await import('pdf-parse')
+    ensurePdfjsWorker(mod.PDFParse)
+    const PDFParse = mod.PDFParse as new (opts: { data: Buffer }) => {
+      getText: (params?: object) => Promise<{ text: string }>
+      destroy: () => Promise<void>
+    }
+    const parser = new PDFParse({ data: buffer })
+    try {
+      const pdfData = await parser.getText()
+      return (pdfData.text || '').trim()
+    } finally {
+      await parser.destroy()
+    }
+  }
+
+  if (kind === 'word') {
+    const mod = await import('word-extractor')
+    const WordExtractor = mod.default
+    const extractor = new WordExtractor()
+    const doc = await extractor.extract(buffer)
+    return (doc.getBody() || '').trim()
+  }
+
+  if (kind === 'text') {
+    return buffer.toString('utf-8').trim().slice(0, 500_000)
+  }
+
+  throw new Error(
+    `Formato de CV não suportado para análise (${mimeType || 'desconhecido'}). Use PDF ou Word (.doc, .docx).`
+  )
 }
 
 export async function uploadCvBuffer(
@@ -151,7 +231,8 @@ async function persistCandidateAiScores(
   jobId: string,
   buffer: Buffer | null,
   mimeType: string,
-  formResponses: FormQaItem[] | null | undefined
+  formResponses: FormQaItem[] | null | undefined,
+  cvOriginalFileName?: string | null
 ): Promise<{ ok: true; newStatus: 'approved' | 'rejected' } | { error: string }> {
   try {
     const { data: job, error: jobError } = await supabase
@@ -165,7 +246,9 @@ async function persistCandidateAiScores(
     }
 
     const cvText =
-      buffer && buffer.length > 0 ? await extractCvText(buffer, mimeType) : NO_CV_PLACEHOLDER_PT
+      buffer && buffer.length > 0
+        ? await extractCvText(buffer, mimeType, cvOriginalFileName)
+        : NO_CV_PLACEHOLDER_PT
     const formContext = formResponsesToAiContext(formResponses ?? null)
     const aiResult = await analyzeCVWithAI(
       cvText,
@@ -196,6 +279,9 @@ async function persistCandidateAiScores(
     return { ok: true, newStatus }
   } catch (error) {
     console.error('AI Processing Error:', error)
+    if (error instanceof Error && error.message.includes('Formato de CV não suportado')) {
+      return { error: error.message }
+    }
     return { error: 'Erro ao executar análise de IA.' }
   }
 }
@@ -239,7 +325,16 @@ export async function rerunCandidateAiAnalysis(
     mimeType = fetched.mimeType
   }
 
-  return persistCandidateAiScores(supabase, row.id, row.job_id, buffer, mimeType, formItems)
+  let storageFileHint: string | null = null
+  if (url) {
+    try {
+      const path = new URL(url).pathname
+      storageFileHint = path.split('/').pop() || null
+    } catch {
+      /* ignore */
+    }
+  }
+  return persistCandidateAiScores(supabase, row.id, row.job_id, buffer, mimeType, formItems, storageFileHint)
 }
 
 export async function processCandidateAI(
@@ -251,7 +346,8 @@ export async function processCandidateAI(
   mimeType: string,
   cvUrl: string | null,
   jobId: string,
-  formResponses?: FormQaItem[] | null
+  formResponses?: FormQaItem[] | null,
+  cvOriginalFileName?: string | null
 ): Promise<void> {
   const result = await persistCandidateAiScores(
     supabase,
@@ -259,7 +355,8 @@ export async function processCandidateAI(
     jobId,
     buffer,
     mimeType,
-    formResponses
+    formResponses,
+    cvOriginalFileName
   )
 
   if ('error' in result) {
