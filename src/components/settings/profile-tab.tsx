@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { updateProfile, updatePassword } from '@/app/actions/settings'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { User, Lock, CheckCircle } from 'lucide-react'
+import { User, Lock, CheckCircle, Sparkles } from 'lucide-react'
 
 interface ProfileTabProps {
   profile: { full_name: string | null } | null
@@ -85,6 +86,36 @@ export function ProfileTab({ profile, email }: ProfileTabProps) {
             {profileLoading ? 'Salvando...' : 'Salvar Perfil'}
           </Button>
         </form>
+      </div>
+
+      {/* IA — candidatos */}
+      <div className="rounded-2xl border border-border/60 bg-white shadow-sm overflow-hidden">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-border/40 bg-[#FAFAFA]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#7C3AED]/15">
+            <Sparkles className="h-4 w-4 text-[#7C3AED]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold">Análise de candidatos (IA)</h3>
+            <p className="text-xs text-muted-foreground">
+              Scores, resumos e respostas de formulário após o processamento automático.
+            </p>
+          </div>
+        </div>
+        <div className="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <p className="text-sm text-muted-foreground max-w-md">
+            Abra a lista de candidatos e escolha um registo para ver o detalhe e a análise gerada pela IA.
+          </p>
+          <Button
+            variant="outline"
+            className="h-10 rounded-lg font-semibold shrink-0 border-[#7C3AED]/30 text-[#7C3AED] hover:bg-[#7C3AED]/5"
+            asChild
+          >
+            <Link href="/dashboard/candidates">
+              <Sparkles className="h-4 w-4 mr-2" />
+              Ver candidatos e IA
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Password */}

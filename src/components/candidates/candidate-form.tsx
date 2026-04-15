@@ -18,6 +18,7 @@ import {
   X,
   Briefcase,
   ClipboardList,
+  Eye,
 } from 'lucide-react'
 
 type FormResponseRow = { question: string; answer: string }
@@ -117,23 +118,33 @@ export function CandidateForm({ jobs, initialData }: CandidateFormProps) {
   return (
     <div className="max-w-3xl mx-auto space-y-8">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link
-          href="/dashboard/candidates"
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-white hover:bg-[#F5F5F5] transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            {isEditing ? 'Editar Candidato' : 'Novo Candidato'}
-          </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {isEditing
-              ? 'Atualize as informações do candidato.'
-              : 'Cadastre manualmente um candidato e faça upload do currículo.'}
-          </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/dashboard/candidates"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-white hover:bg-[#F5F5F5] transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">
+              {isEditing ? 'Editar Candidato' : 'Novo Candidato'}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {isEditing
+                ? 'Atualize as informações do candidato.'
+                : 'Cadastre manualmente um candidato e faça upload do currículo.'}
+            </p>
+          </div>
         </div>
+        {isEditing && initialData?.id && (
+          <Button variant="outline" className="h-10 rounded-lg font-semibold shrink-0" asChild>
+            <Link href={`/dashboard/candidates/${initialData.id}`}>
+              <Eye className="h-4 w-4 mr-2" />
+              Ver detalhe e IA
+            </Link>
+          </Button>
+        )}
       </div>
 
       <form action={handleSubmit} className="space-y-6">

@@ -2,8 +2,10 @@ import { CandidateForm } from "@/components/candidates/candidate-form";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 
-export default async function EditCandidatePage({ params }: { params: { id: string } }) {
-  const { id } = params;
+type PageProps = { params: Promise<{ id: string }> };
+
+export default async function EditCandidatePage({ params }: PageProps) {
+  const { id } = await params;
   const supabase = await createClient();
 
   const { data: candidate, error } = await supabase

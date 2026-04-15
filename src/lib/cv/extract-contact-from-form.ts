@@ -2,6 +2,63 @@ import type { FormQaItem } from '@/lib/cv/form-responses'
 
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
 
+function normalizeQuestionTitle(q: string): string {
+  return q.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/**
+ * Nome a partir do texto da pergunta (ex.: "Nome Completo", "Nome").
+ * Prioriza rótulos explícitos sobre heurísticas genéricas.
+ */
+export function extractNameFromFormLabels(items: FormQaItem[]): string | null {
+  const scored: { score: number; value: string }[] = []
+
+  for (const row of items) {
+    const qRaw = row.question?.trim() ?? ''
+    const q = normalizeQuestionTitle(qRaw)
+    const v = row.answer?.trim() ?? ''
+    if (!v || EMAIL_RE.test(v) || v.length > 200) continue
+
+    if (/\b(e-?mail|endereço\s+de\s+e-?mail|endereco\s+de\s+e-?mail)\b/i.test(qRaw)) continue
+    if (/\bnome\s+(da|de|do)\s+(empresa|fantasia|razão|razao)\b/i.test(q)) continue
+
+    let score = 0
+    if (q === 'nome completo') score = 100
+    else if (q === 'nome') score = 90
+    else if (/\bnome\s+completo\b/.test(q)) score = 85
+    else if (
+      /\b(nome\s+civil|seu\s+nome|qual\s+(é|e)\s+o\s+seu\s+nome|qual\s+(é|e)\s+seu\s+nome|full\s*name)\b/i.test(
+        q
+      )
+    )
+      score = 80
+    else if (/\bnome\b/.test(q) && !/\b(usuario|usuário|utilizador|login)\b/.test(q)) score = 35
+
+    if (score > 0) scored.push({ score, value: v })
+  }
+
+  if (!scored.length) return null
+  scored.sort((a, b) => b.score - a.score)
+  return scored[0].value
+}
+
+/**
+ * Telefone a partir do rótulo (Telefone, Celular, WhatsApp, etc.).
+ * Não exige quantidade mínima de dígitos — grava o que veio na resposta.
+ */
+export function extractPhoneFromFormLabels(items: FormQaItem[]): string | null {
+  const phoneQ =
+    /\b(telefone|celular|whatsapp|whats\s*app|phone|fone|mobile|tel\.?|número|numero|contato\s+telef[oô]nico)\b/i
+  for (const row of items) {
+    if (!phoneQ.test(row.question ?? '')) continue
+    const v = row.answer?.trim() ?? ''
+    if (!v) continue
+    if (EMAIL_RE.test(v)) continue
+    return v
+  }
+  return null
+}
+
 function firstEmailInAnswers(items: FormQaItem[]): { email: string; index: number } | null {
   for (let i = 0; i < items.length; i++) {
     const raw = items[i].answer?.trim() ?? ''
@@ -45,14 +102,16 @@ export function extractContactFromFormResponses(
 
   const { email, index: emailIndex } = found
 
-  let phone: string | null = null
-  const phoneTitle = /\b(telefone|celular|whatsapp|phone|fone|mobile)\b/i
-  for (const row of items) {
-    if (phoneTitle.test(row.question)) {
-      const v = row.answer?.trim() ?? ''
-      if (v && looksLikePhoneDigits(v)) {
-        phone = v
-        break
+  let phone = extractPhoneFromFormLabels(items)
+  if (!phone) {
+    const phoneTitle = /\b(telefone|celular|whatsapp|phone|fone|mobile)\b/i
+    for (const row of items) {
+      if (phoneTitle.test(row.question)) {
+        const v = row.answer?.trim() ?? ''
+        if (v && looksLikePhoneDigits(v)) {
+          phone = v
+          break
+        }
       }
     }
   }
@@ -69,19 +128,7 @@ export function extractContactFromFormResponses(
     }
   }
 
-  let name = ''
-  const nameTitle =
-    /\b(nome\s+completo|nome\s+civil|seu\s+nome|full\s*name|name)\b/i
-  for (const row of items) {
-    if (nameTitle.test(row.question) && !/\b(e-?mail|email)\b/i.test(row.question)) {
-      const v = row.answer?.trim() ?? ''
-      if (v && !EMAIL_RE.test(v) && v.length <= 200) {
-        name = v
-        break
-      }
-    }
-  }
-
+  let name = extractNameFromFormLabels(items) ?? ''
   if (!name) {
     for (let i = 0; i < items.length; i++) {
       if (i === emailIndex) continue

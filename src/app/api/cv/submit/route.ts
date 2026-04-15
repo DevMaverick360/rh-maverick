@@ -9,7 +9,11 @@ import {
   resolveJobId,
   uploadCvBuffer,
 } from '@/lib/cv/ingest-pipeline'
-import { extractContactFromFormResponses } from '@/lib/cv/extract-contact-from-form'
+import {
+  extractContactFromFormResponses,
+  extractNameFromFormLabels,
+  extractPhoneFromFormLabels,
+} from '@/lib/cv/extract-contact-from-form'
 import { INTEGRATION_TOKEN } from '@/lib/cv/integration-token'
 import { parseFormResponses, parseFormResponsesFromJsonString } from '@/lib/cv/form-responses'
 
@@ -123,6 +127,13 @@ async function handleJsonIngest(req: Request, supabase: Awaited<ReturnType<typeo
     name = 'Candidato'
   }
 
+  if (parsedForm?.length) {
+    const labelName = extractNameFromFormLabels(parsedForm)
+    const labelPhone = extractPhoneFromFormLabels(parsedForm)
+    if (labelName) name = labelName
+    if (labelPhone) phone = labelPhone
+  }
+
   if (!name || !email) {
     return NextResponse.json(
       {
@@ -227,6 +238,17 @@ async function handleMultipartIngest(req: Request, supabase: Awaited<ReturnType<
       if (!email) email = extracted.email
       if (!phone) phone = extracted.phone
     }
+  }
+
+  if (!name && email) {
+    name = 'Candidato'
+  }
+
+  if (parsedFormMultipart?.length) {
+    const labelName = extractNameFromFormLabels(parsedFormMultipart)
+    const labelPhone = extractPhoneFromFormLabels(parsedFormMultipart)
+    if (labelName) name = labelName
+    if (labelPhone) phone = labelPhone
   }
 
   if (!name || !email) {

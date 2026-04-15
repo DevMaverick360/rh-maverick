@@ -9,7 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Search, UserPlus, Edit, Users } from "lucide-react";
+import { Search, UserPlus, Edit, Users, Eye } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -102,7 +102,7 @@ export default async function CandidatesPage() {
                 <TableHead className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] py-3.5 text-right">
                   Cultural
                 </TableHead>
-                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] py-3.5 text-right w-[100px]">
+                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] py-3.5 text-right w-[120px]">
                   Ações
                 </TableHead>
               </TableRow>
@@ -124,7 +124,12 @@ export default async function CandidatesPage() {
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold text-sm">{candidate.name}</span>
+                          <Link
+                            href={`/dashboard/candidates/${candidate.id}`}
+                            className="font-semibold text-sm hover:text-[#7C3AED] hover:underline"
+                          >
+                            {candidate.name}
+                          </Link>
                           {'form_responses' in candidate &&
                             Array.isArray(candidate.form_responses) &&
                             candidate.form_responses.length > 0 && (
@@ -163,6 +168,18 @@ export default async function CandidatesPage() {
                         size="sm"
                         className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                         asChild
+                        title="Ver detalhe e análise IA"
+                      >
+                        <Link href={`/dashboard/candidates/${candidate.id}`}>
+                          <Eye className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                        asChild
+                        title="Editar"
                       >
                         <Link href={`/dashboard/candidates/${candidate.id}/edit`}>
                           <Edit className="h-4 w-4" />

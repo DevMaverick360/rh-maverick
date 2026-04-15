@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { rerunCandidateAiAnalysis } from '@/lib/cv/ingest-pipeline'
 
 export async function createCandidate(formData: FormData) {
   const supabase = await createClient()
@@ -107,6 +108,28 @@ export async function updateCandidate(id: string, formData: FormData) {
 
   revalidatePath('/dashboard/candidates')
   redirect('/dashboard/candidates')
+}
+
+/** Reexecuta análise de IA com critérios atuais da vaga; não envia e-mail ao candidato. */
+export async function rerunCandidateAiAnalysisAction(
+  candidateId: string
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    return { error: 'Não autenticado.' }
+  }
+
+  const result = await rerunCandidateAiAnalysis(supabase, candidateId)
+  if ('error' in result) {
+    return result
+  }
+
+  revalidatePath(`/dashboard/candidates/${candidateId}`)
+  revalidatePath('/dashboard/candidates')
+  return { ok: true }
 }
 
 export async function deleteCandidate(id: string) {
