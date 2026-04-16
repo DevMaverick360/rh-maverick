@@ -106,11 +106,22 @@ function enviarParaMaverickComResposta_(response) {
         if (ids.length) {
           var id0 = String(ids[0]);
           var m = id0.match(/[-\\w]{25,}/);
-          var idArquivo = m ? m[0] : id0;
-          var arquivo = DriveApp.getFileById(idArquivo);
-          arquivoCv = arquivo.getBlob();
-          nomeArquivo = arquivo.getName() || nomeArquivo;
-          tipoArquivo = arquivo.getMimeType() || tipoArquivo;
+          var idArquivo = m ? m[0] : id0.trim();
+          try {
+            var arquivo = DriveApp.getFileById(idArquivo);
+            arquivoCv = arquivo.getBlob();
+            nomeArquivo = arquivo.getName() || nomeArquivo;
+            tipoArquivo = arquivo.getMimeType() || tipoArquivo;
+          } catch (driveErr) {
+            throw new Error(
+              'CV (upload): o Google Drive não encontrou o ficheiro ou o script não tem permissão (id extraído: ' +
+                idArquivo +
+                '). Confirme: (1) o gatilho foi criado na mesma conta Google que é dona do formulário; ' +
+                '(2) ao autorizar o script, aceite o acesso ao Google Drive; (3) o ficheiro não foi apagado; ' +
+                '(4) a pergunta é mesmo "Upload de ficheiro" do Forms (não só um link). Detalhe: ' +
+                String(driveErr)
+            );
+          }
         }
       }
       continue;
@@ -166,7 +177,7 @@ function formatarResposta(resp) {
 const ORIENTACAO_FORMULARIO = `O que o formulário precisa ter:
 
 • E-mail do candidato: em Definições do formulário pode usar "Recolher endereços de e-mail dos inquiridos" (o script envia automaticamente) e/ou pergunta "Validação de e-mail".
-• Opcional: pergunta "Upload de arquivo" (clip) para o currículo em PDF ou Word (.doc, .docx). Links numa caixa de texto não substituem o upload.
+• Opcional: pergunta "Upload de arquivo" (clip) para o currículo em PDF ou Word (.doc, .docx). Links numa caixa de texto não substituem o upload. Se o registo de execuções mostrar erro de "ID não encontrado" no Drive, o gatilho deve estar na conta dona do formulário e o script precisa de permissão Drive ao correr.
 • Outras perguntas (texto, múltipla escolha, etc.) — aparecem no Maverick em form_responses.
 
 Sem upload, o Maverick regista a candidatura só com as respostas (a IA avalia com base no formulário). Com upload, o ficheiro é anexado. Quem anexa ficheiros precisa de sessão Google.`
