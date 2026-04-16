@@ -10,7 +10,6 @@ import {
   LogOut,
   ChevronRight,
 } from "lucide-react";
-import { logout } from "@/app/actions/auth";
 import { cn } from "@/lib/utils";
 
 const navigation = [
@@ -75,7 +74,7 @@ export function Sidebar() {
 
       {/* Logout */}
       <div className="shrink-0 p-3 border-t border-[#1A1A1A]">
-        <form action={logout}>
+        <form action="/api/auth/logout" method="post">
           <button
             type="submit"
             className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-400 hover:bg-white/5 hover:text-gray-200 transition-all duration-200"

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, type FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import { createCandidate, updateCandidate } from '@/app/actions/candidates'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,6 +49,7 @@ interface CandidateFormProps {
 }
 
 export function CandidateForm({ jobs, initialData }: CandidateFormProps) {
+  const router = useRouter()
   const isEditing = !!initialData
   const formResponseRows = isEditing ? normalizeFormResponses(initialData?.form_responses) : []
   const [error, setError] = useState<string | null>(null)
@@ -94,7 +96,9 @@ export function CandidateForm({ jobs, initialData }: CandidateFormProps) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
   }
 
-  async function handleSubmit(formData: FormData) {
+  async function submitCandidate(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
     setLoading(true)
     setError(null)
 
@@ -102,15 +106,23 @@ export function CandidateForm({ jobs, initialData }: CandidateFormProps) {
       formData.set('cv', file)
     }
 
-    let result
-    if (isEditing) {
-      result = await updateCandidate(initialData.id, formData)
-    } else {
-      result = await createCandidate(formData)
-    }
+    try {
+      let result
+      if (isEditing) {
+        result = await updateCandidate(initialData!.id, formData)
+      } else {
+        result = await createCandidate(formData)
+      }
 
-    if (result?.error) {
-      setError(result.error)
+      if (result?.error) {
+        setError(result.error)
+        setLoading(false)
+        return
+      }
+      router.push('/dashboard/candidates')
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao guardar.')
       setLoading(false)
     }
   }
@@ -147,7 +159,7 @@ export function CandidateForm({ jobs, initialData }: CandidateFormProps) {
         )}
       </div>
 
-      <form action={handleSubmit} className="space-y-6">
+      <form onSubmit={submitCandidate} className="space-y-6">
         {/* Section 1 — Dados Pessoais */}
         <div className="rounded-2xl border border-border/60 bg-white shadow-sm overflow-hidden">
           <div className="flex items-center gap-3 px-6 py-4 border-b border-border/40 bg-[#FAFAFA]">

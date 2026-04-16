@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { updateProfile, updatePassword } from '@/app/actions/settings'
 import { Button } from '@/components/ui/button'
@@ -22,23 +22,33 @@ export function ProfileTab({ profile, email }: ProfileTabProps) {
   const [pwErr, setPwErr] = useState<string | null>(null)
   const [pwLoading, setPwLoading] = useState(false)
 
-  async function handleProfile(formData: FormData) {
+  async function submitProfile(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
     setProfileLoading(true)
     setProfileErr(null)
     setProfileMsg(null)
-    const result = await updateProfile(formData)
-    if (result?.error) setProfileErr(result.error)
-    else setProfileMsg('Perfil atualizado.')
+    try {
+      const result = await updateProfile(new FormData(e.currentTarget))
+      if (result?.error) setProfileErr(result.error)
+      else setProfileMsg('Perfil atualizado.')
+    } catch (err) {
+      setProfileErr(err instanceof Error ? err.message : 'Falha ao guardar.')
+    }
     setProfileLoading(false)
   }
 
-  async function handlePassword(formData: FormData) {
+  async function submitPassword(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
     setPwLoading(true)
     setPwErr(null)
     setPwMsg(null)
-    const result = await updatePassword(formData)
-    if (result?.error) setPwErr(result.error)
-    else setPwMsg('Senha alterada com sucesso.')
+    try {
+      const result = await updatePassword(new FormData(e.currentTarget))
+      if (result?.error) setPwErr(result.error)
+      else setPwMsg('Senha alterada com sucesso.')
+    } catch (err) {
+      setPwErr(err instanceof Error ? err.message : 'Falha ao alterar senha.')
+    }
     setPwLoading(false)
   }
 
@@ -55,7 +65,7 @@ export function ProfileTab({ profile, email }: ProfileTabProps) {
             <p className="text-xs text-muted-foreground">Informações básicas da conta.</p>
           </div>
         </div>
-        <form action={handleProfile} className="p-6 space-y-5">
+        <form onSubmit={submitProfile} className="p-6 space-y-5">
           <div className="grid gap-5 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="full_name" className="text-sm font-semibold">Nome completo</Label>
@@ -129,7 +139,7 @@ export function ProfileTab({ profile, email }: ProfileTabProps) {
             <p className="text-xs text-muted-foreground">Mínimo de 6 caracteres.</p>
           </div>
         </div>
-        <form action={handlePassword} className="p-6 space-y-5">
+        <form onSubmit={submitPassword} className="p-6 space-y-5">
           <div className="max-w-sm space-y-2">
             <Label htmlFor="new_password" className="text-sm font-semibold">Nova senha</Label>
             <Input

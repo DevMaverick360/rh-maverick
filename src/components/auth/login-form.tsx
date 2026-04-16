@@ -1,25 +1,34 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import { login } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import Link from 'next/link'
 import { ArrowRight, Zap, Shield, TrendingUp } from 'lucide-react'
 
 export function LoginForm() {
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(formData: FormData) {
+  async function submitLogin(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
     setLoading(true)
     setError(null)
-
-    const result = await login(formData)
-    
-    if (result?.error) {
-      setError(result.error)
+    try {
+      const result = await login(formData)
+      if (result?.error) {
+        setError(result.error)
+        setLoading(false)
+        return
+      }
+      router.push('/dashboard')
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível entrar.')
       setLoading(false)
     }
   }
@@ -81,10 +90,12 @@ export function LoginForm() {
           <div className="space-y-2 text-center lg:text-left">
             <h1 className="text-3xl font-bold tracking-tight lg:hidden">Maverick 360</h1>
             <h2 className="text-2xl font-bold tracking-tight">Acessar Painel</h2>
-            <p className="text-muted-foreground text-sm">Entre com suas credenciais para continuar</p>
+            <p className="text-muted-foreground text-sm">
+              Uso interno — o administrador cria o seu acesso no painel.
+            </p>
           </div>
 
-          <form action={handleSubmit} className="space-y-5">
+          <form onSubmit={submitLogin} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium">E-mail</Label>
               <Input
@@ -118,13 +129,6 @@ export function LoginForm() {
               {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
             </Button>
           </form>
-
-          <div className="text-center text-sm text-muted-foreground">
-            Não tem uma conta?{' '}
-            <Link href="/register" className="font-semibold text-foreground hover:text-accent transition-colors">
-              Cadastre-se
-            </Link>
-          </div>
         </div>
       </div>
     </div>

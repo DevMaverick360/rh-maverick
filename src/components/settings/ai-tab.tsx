@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { updateAISettings } from '@/app/actions/settings'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,20 +22,26 @@ export function AITab({ settings }: AITabProps) {
   const [loading, setLoading] = useState(false)
   const [temperature, setTemperature] = useState(settings?.temperature ?? 0.3)
 
-  async function handleSubmit(formData: FormData) {
+  async function submitAi(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
     setLoading(true)
     setErr(null)
     setMsg(null)
     formData.set('temperature', temperature.toString())
-    const result = await updateAISettings(formData)
-    if (result?.error) setErr(result.error)
-    else setMsg('Configurações da IA salvas.')
+    try {
+      const result = await updateAISettings(formData)
+      if (result?.error) setErr(result.error)
+      else setMsg('Configurações da IA salvas.')
+    } catch (err) {
+      setErr(err instanceof Error ? err.message : 'Falha ao guardar.')
+    }
     setLoading(false)
   }
 
   return (
     <div className="space-y-6">
-      <form action={handleSubmit} className="space-y-6">
+      <form onSubmit={submitAi} className="space-y-6">
         {/* System Prompt */}
         <div className="rounded-2xl border border-border/60 bg-white shadow-sm overflow-hidden">
           <div className="flex items-center gap-3 px-6 py-4 border-b border-border/40 bg-[#FAFAFA]">

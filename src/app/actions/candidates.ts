@@ -1,7 +1,6 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
 export async function createCandidate(formData: FormData) {
@@ -53,7 +52,7 @@ export async function createCandidate(formData: FormData) {
   }
 
   revalidatePath('/dashboard/candidates')
-  redirect('/dashboard/candidates')
+  return { success: true as const }
 }
 
 export async function updateCandidate(id: string, formData: FormData) {
@@ -106,5 +105,5 @@ export async function updateCandidate(id: string, formData: FormData) {
   }
 
   revalidatePath('/dashboard/candidates')
-  redirect('/dashboard/candidates')
+  return { success: true as const }
 }

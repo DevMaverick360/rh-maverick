@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { updateUserRole, deleteUser, createUser } from '@/app/actions/settings'
+import { useState, type FormEvent } from 'react'
+import { updateUserRole, deleteUser } from '@/app/actions/settings'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Trash2, Shield, Users, UserPlus, Mail, Lock, User } from 'lucide-react'
@@ -64,18 +64,37 @@ export function UsersTab({ users: initialUsers, currentUserId }: { users: UserIt
     setUsers(prev => prev.filter(u => u.id !== userId))
   }
 
-  const handleCreateUser = async (formData: FormData) => {
+  const submitCreateUser = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const form = e.currentTarget
+    const formData = new FormData(form)
     setCreateLoading(true)
     setCreateError(null)
-    const result = await createUser(formData)
-    if (result?.error) {
-      setCreateError(result.error)
-      setCreateLoading(false)
-    } else {
+    try {
+      const res = await fetch('/api/dashboard/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          email: formData.get('email'),
+          full_name: formData.get('full_name'),
+          role: formData.get('role'),
+          password: formData.get('password'),
+        }),
+      })
+      const json = (await res.json().catch(() => ({}))) as { error?: string; success?: boolean }
+      if (!res.ok || json.error) {
+        setCreateError(json.error || res.statusText || 'Falha ao criar utilizador.')
+        setCreateLoading(false)
+        return
+      }
       setIsCreateOpen(false)
       setCreateLoading(false)
-      // Note: Revalidation will refresh the page in a real environment
+      form.reset()
       window.location.reload()
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Falha ao criar utilizador.')
+      setCreateLoading(false)
     }
   }
 
@@ -107,7 +126,7 @@ export function UsersTab({ users: initialUsers, currentUserId }: { users: UserIt
                 Crie um novo acesso para sua equipe. O usuário poderá logar com estas credenciais.
               </DialogDescription>
             </DialogHeader>
-            <form action={handleCreateUser} className="space-y-4 py-4">
+            <form onSubmit={submitCreateUser} className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="full_name">Nome Completo</Label>
                 <div className="relative">

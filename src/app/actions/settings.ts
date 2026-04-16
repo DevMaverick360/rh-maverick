@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { createPanelUser } from '@/lib/users/create-panel-user'
 
 // ── Profile ──
 export async function updateProfile(formData: FormData) {
@@ -72,36 +74,39 @@ export async function updateUserRole(userId: string, role: string) {
 
 export async function createUser(formData: FormData) {
   const supabase = await createClient()
+  const admin = createServiceRoleClient()
+  if (!admin) {
+    return {
+      error:
+        'Defina SUPABASE_SERVICE_ROLE_KEY no servidor (variável de ambiente) para criar utilizadores pelo painel.',
+    }
+  }
 
-  const email = formData.get('email') as string
-  const fullName = formData.get('full_name') as string
-  const role = formData.get('role') as string
-  const password = formData.get('password') as string
+  const {
+    data: { user: caller },
+  } = await supabase.auth.getUser()
+  if (!caller) {
+    return { error: 'Não autenticado.' }
+  }
 
-  // Since regular users can't create other users bypass email confirmation or set passwords easily 
-  // without a service role, we use signUp. Note: This will NOT log the admin out if done correctly server-side.
-  const { data, error: signUpError } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: fullName,
-      },
-    },
+  const emailRaw = formData.get('email')
+  const fullNameRaw = formData.get('full_name')
+  const roleRaw = formData.get('role')
+  const passwordRaw = formData.get('password')
+
+  const result = await createPanelUser(supabase, admin, caller, {
+    email: typeof emailRaw === 'string' ? emailRaw : '',
+    fullName: typeof fullNameRaw === 'string' ? fullNameRaw : '',
+    role: typeof roleRaw === 'string' ? roleRaw : '',
+    password: typeof passwordRaw === 'string' ? passwordRaw : '',
   })
 
-  if (signUpError) return { error: signUpError.message }
-
-  // Update role immediately if successful, as trigger might default to admin
-  if (data?.user) {
-    await supabase
-      .from('profiles')
-      .update({ role })
-      .eq('id', data.user.id)
+  if ('error' in result) {
+    return result
   }
 
   revalidatePath('/dashboard/settings')
-  return { success: true }
+  return { success: true as const }
 }
 
 export async function deleteUser(userId: string) {

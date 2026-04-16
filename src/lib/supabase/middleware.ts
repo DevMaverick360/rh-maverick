@@ -35,11 +35,17 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const isAuthPage = request.nextUrl.pathname === '/' || request.nextUrl.pathname === '/register'
+  const isAuthPage = request.nextUrl.pathname === '/'
   const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard')
-  /** Dashboard HTML redirect breaks Server Action POST responses (HTML vs flight). */
-  const isServerActionPost =
-    request.method === 'POST' && request.headers.has('next-action')
+  /**
+   * Só redirecionar para o login em navegação GET/HEAD.
+   * Um POST ao dashboard (Server Actions, formulários, etc.) não pode receber 302 HTML —
+   * o cliente Next espera o formato de resposta da action e falha com
+   * "An unexpected response was received from the server".
+   * O header `next-action` também não é fiável entre versões do Next.
+   */
+  const isDocumentNavigation =
+    request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS'
 
   // Redirect users to dashboard if they are logged in and trying to access auth pages
   if (user && isAuthPage) {
@@ -49,8 +55,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redirect users to login if they are NOT logged in and trying to access a protected route
-  if (!user && isDashboardRoute && !isServerActionPost) {
-    // no user, potentially respond by redirecting the user to the login page
+  if (!user && isDashboardRoute && isDocumentNavigation) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
