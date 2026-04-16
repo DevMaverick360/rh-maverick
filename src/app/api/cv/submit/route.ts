@@ -350,34 +350,32 @@ export async function GET() {
         'Authorization: Bearer <token de integração>',
         'ou x-cv-ingest-secret: <token de integração>',
       ],
-      note: 'Token fixo de integração embutido na API ou CV_INGEST_SECRET no servidor (se definido; ambos são aceitos).',
-    },
-    supabase: {
-      service_role:
-        'Recomendado: SUPABASE_SERVICE_ROLE_KEY para upload/storage sem sessão do candidato.',
+      note: 'Use o token mostrado em Configurações → Integração no painel. Se o servidor tiver variável CV_INGEST_SECRET, esse valor também é aceite.',
     },
     json: {
       contentType: 'application/json',
       plugAndPlay: {
         description:
           'Pode omitir name, email e phone se enviar form_responses (ou form_submission) com as respostas do Google Form — o servidor infere contato. O CV (cv_base64 ou cv_url) é opcional: candidaturas só com formulário são aceites.',
-        required: ['job_id OU job_code', 'form_responses OU (name E email)'],
+        required: ['form_responses OU (name E email)'],
+        optionalJob:
+          'job_id (UUID) ou job_code da vaga no painel — se omitidos, a candidatura entra como entrada geral (sem vaga). A análise automática por IA só corre quando há vaga.',
       },
-      required: ['job_id OU job_code'],
       optional: [
-        'cv_base64, cv_filename, cv_mime_type — ou cv_url (HTTPS). Análise de IA: PDF, Word .doc / .docx (e .txt); use cv_filename com extensão correta se o MIME for genérico.',
+        'job_id, job_code — vaga associada (opcional)',
+        'cv_base64, cv_filename, cv_mime_type — ou cv_url (HTTPS). Para análise de IA com vaga: PDF, Word .doc / .docx (e .txt); use cv_filename com extensão correta se o MIME for genérico.',
         'name, email, respondent_email (alias), phone — se omitidos em parte, use form_responses para inferência',
         'form_responses OU form_submission: array de { question: string, answer: string }',
       ],
-      job_code:
-        'Código cadastrado no painel na vaga (minúsculas; ex.: frontend-sp). Alternativa ao UUID job_id.',
+      job_code: 'Código da vaga no painel (minúsculas). Opcional se quiser entrada geral.',
     },
     multipart: {
       contentType: 'multipart/form-data',
-      fields: ['job_id OU job_code'],
+      fields: ['form_responses OU (name E email), opcionalmente job_id ou job_code'],
       optional: [
-        'cv (file) — opcional; PDF ou Word (.doc, .docx) para análise de IA',
+        'cv (file) — opcional; PDF ou Word (.doc, .docx) para análise de IA quando há vaga',
         'name, email, phone — ou form_responses / form_submission (string JSON) para inferência',
+        'job_id, job_code — opcional',
       ],
     },
   })

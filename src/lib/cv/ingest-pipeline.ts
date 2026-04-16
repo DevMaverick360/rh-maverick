@@ -18,7 +18,7 @@ export async function resolveJobId(
   supabase: SupabaseClient,
   jobId: string | undefined,
   jobCode: string | undefined
-): Promise<{ id: string } | { error: string }> {
+): Promise<{ id: string | null } | { error: string }> {
   if (jobId?.trim()) {
     const { data, error } = await supabase
       .from('jobs')
@@ -39,7 +39,8 @@ export async function resolveJobId(
     if (error || !data) return { error: 'job_code inválido ou não encontrado' }
     return { id: data.id }
   }
-  return { error: 'Informe job_id (UUID) ou job_code da vaga' }
+  /** Entrada geral: candidatura sem vaga (associe uma vaga depois no painel, se quiser). */
+  return { id: null }
 }
 
 function fileExtensionLower(name: string | null | undefined): string {
@@ -196,7 +197,7 @@ export async function insertCandidateRow(
     name: string
     email: string
     phone: string | null
-    jobId: string
+    jobId: string | null
     cvUrl: string | null
     formResponses?: FormQaItem[] | null
   }
@@ -207,7 +208,7 @@ export async function insertCandidateRow(
       name: input.name.trim(),
       email: input.email.trim(),
       phone: input.phone?.trim() || null,
-      job_id: input.jobId,
+      job_id: input.jobId ?? null,
       cv_url: input.cvUrl ?? null,
       status: 'pending',
       form_responses: input.formResponses?.length ? input.formResponses : null,
@@ -345,10 +346,13 @@ export async function processCandidateAI(
   buffer: Buffer | null,
   mimeType: string,
   cvUrl: string | null,
-  jobId: string,
+  jobId: string | null,
   formResponses?: FormQaItem[] | null,
   cvOriginalFileName?: string | null
 ): Promise<void> {
+  if (!jobId) {
+    return
+  }
   const result = await persistCandidateAiScores(
     supabase,
     candidateId,

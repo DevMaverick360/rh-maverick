@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Maverick 360 — Integração Google Forms</title>
+  <title>Maverick 360 — Google Forms</title>
   <style>
     :root {
       --bg: #f5f5f5;
@@ -57,8 +57,8 @@
     button.copy:hover { background: #f9fafb; }
     button.copy.ok { border-color: #22c55e; color: #15803d; }
     .note {
-      margin-top: 2rem; padding: 1rem 1.25rem; border-radius: 12px; border: 1px solid rgba(245, 158, 11, 0.35);
-      background: rgba(245, 158, 11, 0.08); font-size: 0.85rem;
+      margin-top: 2rem; padding: 1rem 1.25rem; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.35);
+      background: rgba(16, 185, 129, 0.08); font-size: 0.85rem;
     }
     .note strong { display: block; margin-bottom: 0.5rem; }
     a { color: var(--accent); font-weight: 600; }
@@ -66,180 +66,84 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Integração Google Forms → Maverick 360</h1>
+    <h1>Google Forms → Maverick 360</h1>
     <p class="lead">
-      Modo plug-and-play: envie <code>form_responses</code> com todas as perguntas/respostas (JSON), <code>cv_base64</code> e <code>job_code</code> ou <code>job_id</code>.
-      O servidor infere nome, e-mail e telefone (inclua uma resposta com e-mail válido). Opcionalmente envie <code>name</code> e <code>email</code> explícitos.
+      Guia para quem usa o painel. Pode receber candidaturas <strong>sem</strong> vaga cadastrada (entrada geral) ou
+      enviar <code>job_code</code> / <code>job_id</code> para associar a uma vaga. O script completo com token atualizado
+      está em <strong>Configurações → Integração</strong> (área autenticada) — copie dali para o Google Apps Script.
     </p>
 
     <h2>1. URL da API</h2>
     <div class="card" id="block-endpoint">
       <div class="card-h">
         <div>
-          <strong>Endpoint POST</strong>
-          <span>Substituído automaticamente pelo domínio atual ao abrir esta página pelo site.</span>
+          <strong>POST JSON</strong>
+          <span>Se abrir esta página a partir do site, o domínio é preenchido automaticamente.</span>
         </div>
         <button type="button" class="copy" data-copy-target="endpoint-url">Copiar</button>
       </div>
       <pre id="endpoint-url">https://seu-dominio.com/api/cv/submit</pre>
     </div>
 
-    <h2>2. Headers</h2>
+    <h2>2. Autenticação</h2>
+    <p>Cada pedido leva o token de integração no cabeçalho <code>Authorization: Bearer …</code>. O valor correto aparece
+      apenas no painel (não envie o token por e-mail ou redes sociais).</p>
     <div class="card">
       <div class="card-h">
         <div>
-          <strong>Autenticação</strong>
-          <span>Defina <code>CV_INGEST_SECRET</code> no servidor e envie o mesmo valor.</span>
+          <strong>Headers</strong>
         </div>
         <button type="button" class="copy" data-copy-target="hdr">Copiar</button>
       </div>
       <pre id="hdr">Content-Type: application/json
-Authorization: Bearer &lt;CV_INGEST_SECRET&gt;
-
-Alternativa:
-x-cv-ingest-secret: &lt;CV_INGEST_SECRET&gt;</pre>
+Authorization: Bearer &lt;token em Configurações → Integração&gt;</pre>
     </div>
 
-    <h2>3. Variáveis de ambiente (servidor)</h2>
+    <h2>3. Exemplos de corpo JSON</h2>
+    <p><strong>Entrada geral</strong> (sem vaga):</p>
     <div class="card">
       <div class="card-h">
-        <div><strong>Referência .env</strong></div>
-        <button type="button" class="copy" data-copy-target="env">Copiar</button>
-      </div>
-      <pre id="env">CV_INGEST_SECRET=
-SUPABASE_SERVICE_ROLE_KEY=
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-OPENAI_API_KEY=
-RESEND_API_KEY=</pre>
-    </div>
-
-    <h2>4. Corpo JSON</h2>
-    <ul>
-      <li><strong>Plug-and-play:</strong> <code>job_id</code> ou <code>job_code</code>, e <code>form_responses</code> (ou <code>form_submission</code>) — ou <code>name</code> + <code>email</code> no JSON. CV (<code>cv_base64</code> ou <code>cv_url</code>) é <strong>opcional</strong>.</li>
-      <li><strong>Opcional explícito:</strong> <code>name</code>, <code>email</code>, <code>phone</code> (substituem ou complementam a inferência).</li>
-    </ul>
-    <div class="card">
-      <div class="card-h">
-        <div><strong>Exemplo JSON</strong></div>
+        <div><strong>JSON</strong></div>
         <button type="button" class="copy" data-copy-target="json-ex">Copiar</button>
       </div>
       <pre id="json-ex">{
-  "job_code": "frontend-sp-2025",
   "form_responses": [
-    { "question": "Qualquer pergunta", "answer": "Resposta" },
+    { "question": "Nome", "answer": "João" },
+    { "question": "E-mail", "answer": "joao@exemplo.com" }
+  ]
+}</pre>
+    </div>
+    <p><strong>Com vaga</strong> (use o código definido na vaga no painel):</p>
+    <div class="card">
+      <div class="card-h">
+        <div><strong>JSON com job_code</strong></div>
+        <button type="button" class="copy" data-copy-target="json-job">Copiar</button>
+      </div>
+      <pre id="json-job">{
+  "job_code": "frontend-sp",
+  "form_responses": [
     { "question": "E-mail", "answer": "candidato@exemplo.com" }
-  ],
-  "cv_base64": "&lt;opcional&gt;",
-  "cv_filename": "curriculo.pdf",
-  "cv_mime_type": "application/pdf"
+  ]
 }</pre>
     </div>
 
-    <h2>5. Google Apps Script</h2>
-    <p><strong>Gatilho instalável:</strong> função <code>enviarMaverick</code> (copie o nome do script guardado), origem <strong>Do formulário</strong>, evento <strong>Ao enviar o formulário</strong>. Erro &quot;function not found&quot;: o gatilho não coincide com nenhuma função do projeto — apague o gatilho, guarde o código (Ctrl+S) e crie de novo. Não use <code>onFormSubmit</code> para HTTP.</p>
-    <div class="card">
-      <div class="card-h">
-        <div><strong>Script modelo</strong></div>
-        <button type="button" class="copy" data-copy-target="script">Copiar</button>
-      </div>
-      <pre id="script">/**
- * Gatilho INSTALÁVEL: função enviarMaverick — Do formulário — Ao enviar o formulário.
- */
-const API_URL = 'SUBSTITUA/api/cv/submit';
-const INGEST_SECRET = 'SUBSTITUA_PELO_SEGREDO';
-const JOB_CODE = 'codigo-da-vaga';
-const JOB_ID = '';
-
-function enviarMaverick(e) {
-  if (!e || !e.response) throw new Error('Gatilho: enviarMaverick, Do formulário, Ao enviar o formulário.');
-  var itemResponses = e.response.getItemResponses();
-  var formResponses = [];
-  var cvBlob = null;
-  var cvName = 'curriculo.pdf';
-  var cvMime = 'application/pdf';
-  for (var i = 0; i &lt; itemResponses.length; i++) {
-    var ir = itemResponses[i];
-    var item = ir.getItem();
-    var type = item.getType();
-    var title = item.getTitle();
-    if (type === FormApp.ItemType.FILE_UPLOAD) {
-      var ids = ir.getResponse();
-      if (ids != null &amp;&amp; ids !== '') {
-        if (Object.prototype.toString.call(ids) !== '[object Array]') ids = [String(ids)];
-        if (ids.length) {
-          var id0 = String(ids[0]);
-          var m = id0.match(/[-\w]{25,}/);
-          var fileId = m ? m[0] : id0;
-          var file = DriveApp.getFileById(fileId);
-          cvBlob = file.getBlob();
-          cvName = file.getName() || cvName;
-          cvMime = file.getMimeType() || cvMime;
-        }
-      }
-      continue;
-    }
-    formResponses.push({ question: title, answer: formatAnswer_(ir.getResponse()) });
-  }
-  if (!cvBlob &amp;&amp; !formResponses.length) throw new Error('Precisa de respostas (ex.: e-mail) ou ficheiro CV.');
-  var payload = { form_responses: formResponses };
-  try {
-    var er = e.response.getRespondentEmail ? String(e.response.getRespondentEmail() || '').trim() : '';
-    if (er) payload.email = er;
-  } catch (ignore) {}
-  if (cvBlob) {
-    payload.cv_base64 = Utilities.base64Encode(cvBlob.getBytes());
-    payload.cv_filename = cvName;
-    payload.cv_mime_type = cvMime;
-  }
-  if (JOB_CODE) payload.job_code = JOB_CODE;
-  if (JOB_ID) payload.job_id = JOB_ID;
-  var res = UrlFetchApp.fetch(API_URL, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true,
-    headers: { 'Authorization': 'Bearer ' + INGEST_SECRET }
-  });
-  if (res.getResponseCode() &lt; 200 || res.getResponseCode() &gt;= 300) {
-    throw new Error(res.getContentText());
-  }
-}
-
-function aposEnviarFormularioMaverick(e) {
-  enviarMaverick(e);
-}
-
-function formatAnswer_(resp) {
-  if (resp == null) return '';
-  if (Object.prototype.toString.call(resp) === '[object Array]') return resp.join(', ');
-  return String(resp);
-}</pre>
-    </div>
-
-    <h2>6. curl</h2>
-    <div class="card">
-      <div class="card-h">
-        <div><strong>Linha de comando</strong></div>
-        <button type="button" class="copy" data-copy-target="curl">Copiar</button>
-      </div>
-      <pre id="curl">curl -sS -X POST "https://SEU_DOMINIO/api/cv/submit" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer SEU_CV_INGEST_SECRET" \
-  -d @corpo.json</pre>
-    </div>
+    <h2>4. Google Apps Script</h2>
+    <p>Crie o gatilho <strong>instalável</strong> na função <code>enviarMaverick</code>, origem <strong>Do formulário</strong>,
+      evento <strong>Ao enviar o formulário</strong>. Não use <code>onFormSubmit</code> para chamadas HTTP.</p>
+    <p>O código pronto (com token e URL do seu site) está em <strong>Configurações → Integração</strong> no Maverick.</p>
 
     <div class="note">
       <strong>Checklist</strong>
       <ul style="margin:0">
-        <li>Migrações Supabase aplicadas (<code>application_code</code>, <code>form_responses</code>)</li>
-        <li>Bucket <code>cvs</code> e <code>SUPABASE_SERVICE_ROLE_KEY</code> no servidor</li>
-        <li><code>job_code</code> da vaga igual ao enviado pelo script</li>
+        <li>Recolher e-mail no Google Formulário (definições) ou pergunta com e-mail válido.</li>
+        <li>Gatilho apontando exatamente para <code>enviarMaverick</code>.</li>
+        <li>Autorizar o script (rede; Drive se houver upload de CV).</li>
+        <li>Teste com envio real pelo link público do formulário.</li>
       </ul>
     </div>
 
     <p style="margin-top:2rem;font-size:0.8rem;color:var(--muted)">
-      Maverick 360 · Documentação gerada para integração com formulários externos.
+      Maverick 360 · Documentação para utilizadores do painel.
     </p>
   </div>
 

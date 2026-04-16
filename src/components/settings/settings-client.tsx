@@ -41,7 +41,7 @@ export function SettingsClient({
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Configurações</h2>
         <p className="text-muted-foreground mt-1">
-          Perfil, equipe, IA e documentação da API (Google Forms).
+          Perfil, equipe, IA e integração com Google Forms.
         </p>
       </div>
 

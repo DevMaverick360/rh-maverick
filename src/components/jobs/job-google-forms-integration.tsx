@@ -12,7 +12,7 @@ export type JobIntegrationJob = {
   application_code: string | null
 }
 
-function buildAppsScript(apiUrl: string, job: JobIntegrationJob): string {
+export function buildAppsScript(apiUrl: string, job: JobIntegrationJob): string {
   const code = (job.application_code ?? '').trim()
   const usesCode = code.length > 0
   const safeTitle = job.title.replace(/\r?\n/g, ' ').replace(/\*\//g, '')
