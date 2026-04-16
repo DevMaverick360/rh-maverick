@@ -53,6 +53,11 @@ ${jobBlock}
 function extrairIdFicheiroDrive_(s) {
   s = String(s || '').trim();
   if (!s) return '';
+  // Google Forms (upload) pode devolver "1-<idRealDoDrive>" — getFileById precisa só do id real (ex.: 1-fkmnv… → fkmnv…)
+  var comPrefixo = s.match(/^\\d+-([a-zA-Z0-9_-]{20,60})$/);
+  if (comPrefixo) {
+    s = comPrefixo[1];
+  }
   var m = s.match(/\\/d\\/([a-zA-Z0-9_-]+)/);
   if (m) return m[1];
   m = s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
@@ -203,7 +208,7 @@ function formatarResposta(resp) {
 const ORIENTACAO_FORMULARIO = `O que o formulário precisa ter:
 
 • E-mail do candidato: em Definições do formulário pode usar "Recolher endereços de e-mail dos inquiridos" (o script envia automaticamente) e/ou pergunta "Validação de e-mail".
-• Opcional: pergunta "Upload de arquivo" (clip) para o currículo em PDF ou Word (.doc, .docx). Links numa caixa de texto não substituem o upload. Se o registo de execuções mostrar erro de "ID não encontrado" no Drive, o gatilho deve estar na conta dona do formulário e o script precisa de permissão Drive ao correr.
+• Opcional: pergunta "Upload de arquivo" (clip) para o currículo em PDF ou Word (.doc, .docx). O Google Forms pode devolver o id como "1-abc…" (prefixo + id do Drive); o script remove o prefixo. Se ainda falhar, confirme gatilho na conta dona do formulário e permissão Drive.
 • Outras perguntas (texto, múltipla escolha, etc.) — aparecem no Maverick em form_responses.
 
 Sem upload, o Maverick regista a candidatura só com as respostas (a IA avalia com base no formulário). Com upload, o ficheiro é anexado. Quem anexa ficheiros precisa de sessão Google.`
