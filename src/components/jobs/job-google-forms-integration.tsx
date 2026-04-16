@@ -49,6 +49,19 @@ const ENDERECO_API = ${JSON.stringify(apiUrl)};
 const TOKEN_INTEGRACAO = ${JSON.stringify(INTEGRATION_TOKEN)};
 ${jobBlock}
 
+/** Extrai o ID de ficheiro Google Drive a partir do valor do Forms (ID cru ou URL). */
+function extrairIdFicheiroDrive_(s) {
+  s = String(s || '').trim();
+  if (!s) return '';
+  var m = s.match(/\\/d\\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  m = s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  if (/^[a-zA-Z0-9_-]{20,60}$/.test(s)) return s;
+  m = s.match(/[a-zA-Z0-9_-]{25,40}/);
+  return m ? m[0] : s;
+}
+
 /**
  * Ponto de entrada recomendado no gatilho instalável (nome curto = menos erros).
  * NÃO use a função reservada onFormSubmit — gatilho simples bloqueia UrlFetchApp.
@@ -93,9 +106,20 @@ function enviarParaMaverickComResposta_(response) {
 
   for (var i = 0; i < itemResponses.length; i++) {
     var ir = itemResponses[i];
-    var item = ir.getItem();
-    var tipo = item.getType();
-    var titulo = item.getTitle();
+    var item;
+    var tipo;
+    var titulo;
+    try {
+      item = ir.getItem();
+      tipo = item.getType();
+      titulo = item.getTitle();
+    } catch (itemErr) {
+      respostas.push({
+        question: '(pergunta removida ou inacessível)',
+        answer: 'Não foi possível ler esta resposta no formulário. Atualize o script após alterar perguntas. ' + String(itemErr)
+      });
+      continue;
+    }
 
     if (tipo === FormApp.ItemType.FILE_UPLOAD) {
       var ids = ir.getResponse();
@@ -105,22 +129,24 @@ function enviarParaMaverickComResposta_(response) {
         }
         if (ids.length) {
           var id0 = String(ids[0]);
-          var m = id0.match(/[-\\w]{25,}/);
-          var idArquivo = m ? m[0] : id0.trim();
+          var idArquivo = extrairIdFicheiroDrive_(id0);
           try {
             var arquivo = DriveApp.getFileById(idArquivo);
             arquivoCv = arquivo.getBlob();
             nomeArquivo = arquivo.getName() || nomeArquivo;
             tipoArquivo = arquivo.getMimeType() || tipoArquivo;
           } catch (driveErr) {
-            throw new Error(
-              'CV (upload): o Google Drive não encontrou o ficheiro ou o script não tem permissão (id extraído: ' +
+            respostas.push({
+              question: titulo + ' (ficheiro)',
+              answer:
+                '[Upload não lido pelo script] Confirme: gatilho na conta dona do formulário + permissão Drive. ' +
+                'Valor bruto: ' +
+                id0 +
+                ' | id usado: ' +
                 idArquivo +
-                '). Confirme: (1) o gatilho foi criado na mesma conta Google que é dona do formulário; ' +
-                '(2) ao autorizar o script, aceite o acesso ao Google Drive; (3) o ficheiro não foi apagado; ' +
-                '(4) a pergunta é mesmo "Upload de ficheiro" do Forms (não só um link). Detalhe: ' +
+                ' | ' +
                 String(driveErr)
-            );
+            });
           }
         }
       }
