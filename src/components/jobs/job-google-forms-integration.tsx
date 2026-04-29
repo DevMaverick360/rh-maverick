@@ -68,6 +68,72 @@ function extrairIdFicheiroDrive_(s) {
 }
 
 /**
+ * O Forms dispara o gatilho logo após o envio; o ficheiro pode ainda não existir no Drive.
+ * Tenta várias vezes com pausa; depois Drive API v3 (supportsAllDrives) com o mesmo OAuth do script.
+ */
+function obterFicheiroUploadForms_(idArquivo) {
+  idArquivo = String(idArquivo || '')
+    .replace(/^\\uFEFF/, '')
+    .trim();
+  if (!idArquivo) {
+    return { ok: false, err: 'id vazio', nome: '', mime: '' };
+  }
+  var lastErr = '';
+  var tent;
+  for (tent = 0; tent < 6; tent++) {
+    if (tent > 0) {
+      Utilities.sleep(2500);
+    }
+    try {
+      var f = DriveApp.getFileById(idArquivo);
+      return {
+        ok: true,
+        blob: f.getBlob(),
+        nome: f.getName() || '',
+        mime: f.getMimeType() || ''
+      };
+    } catch (e1) {
+      lastErr = String(e1);
+    }
+  }
+  try {
+    var tok = ScriptApp.getOAuthToken();
+    var base = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(idArquivo);
+    var meta = UrlFetchApp.fetch(base + '?fields=name,mimeType&supportsAllDrives=true', {
+      headers: { Authorization: 'Bearer ' + tok },
+      muteHttpExceptions: true
+    });
+    var nome = '';
+    var mime = '';
+    if (meta.getResponseCode() === 200) {
+      try {
+        var jo = JSON.parse(meta.getContentText());
+        nome = jo.name || '';
+        mime = jo.mimeType || '';
+      } catch (ignoreMeta) {}
+    }
+    var r2 = UrlFetchApp.fetch(base + '?alt=media&supportsAllDrives=true', {
+      headers: { Authorization: 'Bearer ' + tok },
+      muteHttpExceptions: true
+    });
+    var c2 = r2.getResponseCode();
+    if (c2 === 200) {
+      var bl = r2.getBlob();
+      return {
+        ok: true,
+        blob: bl,
+        nome: nome || 'curriculo',
+        mime: mime || bl.getContentType() || 'application/pdf'
+      };
+    }
+    lastErr += ' | DriveAPI meta=' + meta.getResponseCode() + ' media=' + c2 + ' ' + r2.getContentText().substring(0, 200);
+  } catch (e2) {
+    lastErr += ' | DriveAPIexc: ' + String(e2);
+  }
+  return { ok: false, err: lastErr, nome: '', mime: '' };
+}
+
+/**
  * Ponto de entrada recomendado no gatilho instalável (nome curto = menos erros).
  * NÃO use a função reservada onFormSubmit — gatilho simples bloqueia UrlFetchApp.
  */
@@ -133,24 +199,26 @@ function enviarParaMaverickComResposta_(response) {
           ids = [String(ids)];
         }
         if (ids.length) {
-          var id0 = String(ids[0]);
+          var id0 = String(ids[0]).trim();
+          if (id0.indexOf(',') >= 0) {
+            ids = id0.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+            id0 = ids[0] || id0;
+          }
           var idArquivo = extrairIdFicheiroDrive_(id0);
-          try {
-            var arquivo = DriveApp.getFileById(idArquivo);
-            arquivoCv = arquivo.getBlob();
-            nomeArquivo = arquivo.getName() || nomeArquivo;
-            tipoArquivo = arquivo.getMimeType() || tipoArquivo;
-          } catch (driveErr) {
+          var obt = obterFicheiroUploadForms_(idArquivo);
+          if (obt.ok) {
+            arquivoCv = obt.blob;
+            nomeArquivo = obt.nome || nomeArquivo;
+            tipoArquivo = obt.mime || tipoArquivo;
+          } else {
             respostas.push({
               question: titulo + ' (ficheiro)',
               answer:
-                '[Upload não lido pelo script] Confirme: gatilho na conta dona do formulário + permissão Drive. ' +
-                'Valor bruto: ' +
-                id0 +
-                ' | id usado: ' +
+                '[Upload não lido após várias tentativas + API Drive] id: ' +
                 idArquivo +
-                ' | ' +
-                String(driveErr)
+                ' | Em Definições do formulário confirme que os ficheiros ficam na Drive do criador do form. ' +
+                'Gatilho = mesma conta dona do form. Detalhe: ' +
+                obt.err
             });
           }
         }
@@ -208,7 +276,7 @@ function formatarResposta(resp) {
 const ORIENTACAO_FORMULARIO = `O que o formulário precisa ter:
 
 • E-mail do candidato: em Definições do formulário pode usar "Recolher endereços de e-mail dos inquiridos" (o script envia automaticamente) e/ou pergunta "Validação de e-mail".
-• Opcional: pergunta "Upload de arquivo" (clip) para o currículo em PDF ou Word (.doc, .docx). O Google Forms pode devolver o id como "1-abc…" (prefixo + id do Drive); o script remove o prefixo. Se ainda falhar, confirme gatilho na conta dona do formulário e permissão Drive.
+• Opcional: pergunta "Upload de arquivo" (clip) para o currículo em PDF ou Word (.doc, .docx). O Forms pode devolver "1-…" antes do id; o script corrige. O script espera até ~15 s e tenta a API Drive (incl. drives partilhados). Em Definições do formulário, confirme que os uploads ficam na Drive do criador (não só na do inquirido), e que o gatilho corre na conta dona do formulário.
 • Outras perguntas (texto, múltipla escolha, etc.) — aparecem no Maverick em form_responses.
 
 Sem upload, o Maverick regista a candidatura só com as respostas (a IA avalia com base no formulário). Com upload, o ficheiro é anexado. Quem anexa ficheiros precisa de sessão Google.`

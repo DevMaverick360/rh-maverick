@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { canEditRhEvaluation, getPanelRole } from '@/lib/auth/panel-role'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import {
@@ -37,6 +38,9 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       cultural_score,
       technical_score,
       ai_summary,
+      rh_notes,
+      rh_technical_score,
+      rh_cultural_score,
       form_responses,
       created_at,
       jobs (
@@ -45,6 +49,14 @@ export default async function CandidateDetailPage({ params }: PageProps) {
         description,
         cultural_criteria,
         technical_criteria
+      ),
+      candidate_tags (
+        tags (
+          id,
+          name,
+          slug,
+          color
+        )
       )
     `
     )
@@ -56,6 +68,12 @@ export default async function CandidateDetailPage({ params }: PageProps) {
   }
 
   const candidate = row as unknown as CandidateDetailData
+  const panelRole = await getPanelRole()
 
-  return <CandidateDetailView candidate={candidate} />
+  return (
+    <CandidateDetailView
+      candidate={candidate}
+      rhEvaluationEditable={canEditRhEvaluation(panelRole)}
+    />
+  )
 }

@@ -10,11 +10,14 @@ import {
   Sparkles,
   ClipboardList,
   Calendar,
+  UserRoundCog,
+  Tags,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { CandidateAiRerunButton } from '@/components/candidates/candidate-ai-rerun-button'
+import { TagChip } from '@/components/candidates/tag-chip'
 
 export type CandidateDetailJob = {
   id: string
@@ -23,6 +26,13 @@ export type CandidateDetailJob = {
   cultural_criteria: string | null
   technical_criteria: string | null
 } | null
+
+export type CandidateDetailTag = {
+  id: string
+  name: string
+  slug: string
+  color: string | null
+}
 
 export type CandidateDetailData = {
   id: string
@@ -35,9 +45,13 @@ export type CandidateDetailData = {
   cultural_score: number | null
   technical_score: number | null
   ai_summary: string | null
+  rh_notes: string | null
+  rh_technical_score: number | null
+  rh_cultural_score: number | null
   form_responses: unknown
   created_at: string
   jobs: CandidateDetailJob
+  candidate_tags: { tags: CandidateDetailTag | null }[] | null
 }
 
 function normalizeFormResponses(raw: unknown): { question: string; answer: string }[] {
@@ -100,8 +114,24 @@ function ScoreBlock({ label, score }: { label: string; score: number | null }) {
   )
 }
 
-export function CandidateDetailView({ candidate }: { candidate: CandidateDetailData }) {
+function candidateTagsList(candidate: CandidateDetailData): CandidateDetailTag[] {
+  const raw = candidate.candidate_tags
+  if (!raw || !Array.isArray(raw)) return []
+  return raw
+    .map((row) => row.tags)
+    .filter((t): t is CandidateDetailTag => t != null && typeof t.id === 'string')
+}
+
+export function CandidateDetailView({
+  candidate,
+  rhEvaluationEditable,
+}: {
+  candidate: CandidateDetailData
+  /** Admin e RH podem registar notas na edição; visualizador só vê. */
+  rhEvaluationEditable: boolean
+}) {
   const rows = normalizeFormResponses(candidate.form_responses)
+  const tagList = candidateTagsList(candidate)
   const created = new Date(candidate.created_at)
   const createdLabel = created.toLocaleString('pt-BR', {
     dateStyle: 'short',
@@ -137,6 +167,14 @@ export function CandidateDetailView({ candidate }: { candidate: CandidateDetailD
                 </Badge>
               )}
             </div>
+            {tagList.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <Tags className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden />
+                {tagList.map((t) => (
+                  <TagChip key={t.id} name={t.name} color={t.color} size="md" className="font-semibold" />
+                ))}
+              </div>
+            )}
             <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5 shrink-0" />
               Candidatura em {createdLabel}
@@ -216,7 +254,9 @@ export function CandidateDetailView({ candidate }: { candidate: CandidateDetailD
               </div>
               <div className="min-w-0">
                 <h2 className="text-sm font-semibold">Análise da IA</h2>
-                <p className="text-xs text-muted-foreground">Critérios da vaga vs. CV e respostas do formulário.</p>
+                <p className="text-xs text-muted-foreground">
+                  Critérios da vaga vs. CV e respostas do formulário — scores automáticos.
+                </p>
               </div>
             </div>
             <CandidateAiRerunButton candidateId={String(candidate.id)} disabled={!candidate.job_id} />
@@ -228,11 +268,11 @@ export function CandidateDetailView({ candidate }: { candidate: CandidateDetailD
               </p>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <ScoreBlock label="Score técnico" score={candidate.technical_score} />
-              <ScoreBlock label="Score cultural" score={candidate.cultural_score} />
+              <ScoreBlock label="Score técnico (IA)" score={candidate.technical_score} />
+              <ScoreBlock label="Score cultural (IA)" score={candidate.cultural_score} />
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] mb-2">Resumo</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] mb-2">Resumo (IA)</p>
               {candidate.ai_summary ? (
                 <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{candidate.ai_summary}</p>
               ) : (
@@ -268,6 +308,53 @@ export function CandidateDetailView({ candidate }: { candidate: CandidateDetailD
           </div>
         </Card>
       </div>
+
+      <Card className="border border-border/60 bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-3.5 border-b border-border/40 bg-[#FAFAFA]">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0F766E]/15">
+              <UserRoundCog className="h-4 w-4 text-[#0F766E]" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">Avaliação do RH</h2>
+              <p className="text-xs text-muted-foreground">
+                {rhEvaluationEditable
+                  ? 'Comentários e scores manuais, alinhados ao mesmo formato da análise por IA.'
+                  : 'Visualização apenas. A edição desta secção é reservada a utilizadores Admin ou RH.'}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="p-5 space-y-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+            <ScoreBlock label="Score técnico (RH)" score={candidate.rh_technical_score} />
+            <ScoreBlock label="Score cultural (RH)" score={candidate.rh_cultural_score} />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] mb-2">Comentário do RH</p>
+            {candidate.rh_notes?.trim() ? (
+              <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{candidate.rh_notes}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {rhEvaluationEditable ? (
+                  <>
+                    Sem notas manuais —{' '}
+                    <Link
+                      href={`/dashboard/candidates/${candidate.id}/edit`}
+                      className="text-[#7C3AED] font-medium hover:underline"
+                    >
+                      registar na edição
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  'Sem notas manuais.'
+                )}
+              </p>
+            )}
+          </div>
+        </div>
+      </Card>
 
       {rows.length > 0 && (
         <Card className="border border-border/60 bg-white rounded-2xl shadow-sm overflow-hidden">

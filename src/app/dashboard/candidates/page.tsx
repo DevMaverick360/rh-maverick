@@ -14,13 +14,22 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CandidateDeleteButton } from "@/components/candidates/candidate-delete-button";
+import { TagChip } from "@/components/candidates/tag-chip";
 
 export default async function CandidatesPage() {
   const supabase = await createClient();
 
   const { data: candidates, error } = await supabase
     .from("candidates")
-    .select("*, jobs(title)")
+    .select(
+      `
+      *,
+      jobs(title),
+      candidate_tags (
+        tags ( id, name, slug, color )
+      )
+    `
+    )
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -97,10 +106,19 @@ export default async function CandidatesPage() {
                   Status
                 </TableHead>
                 <TableHead className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] py-3.5 text-right">
-                  Técnico
+                  Téc. IA
                 </TableHead>
                 <TableHead className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] py-3.5 text-right">
-                  Cultural
+                  Cult. IA
+                </TableHead>
+                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] py-3.5 text-right">
+                  Téc. RH
+                </TableHead>
+                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] py-3.5 text-right">
+                  Cult. RH
+                </TableHead>
+                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] py-3.5 min-w-[140px]">
+                  Tags
                 </TableHead>
                 <TableHead className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] py-3.5 text-right w-[120px]">
                   Ações
@@ -108,7 +126,22 @@ export default async function CandidatesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {candidates.map((candidate) => (
+              {candidates.map((candidate) => {
+                const tagRows =
+                  (
+                    candidate as {
+                      candidate_tags?: {
+                        tags: { id: string; name: string; color?: string | null } | null
+                      }[] | null
+                    }
+                  ).candidate_tags ?? []
+                const tagsForDisplay = tagRows
+                  .map((r) => r.tags)
+                  .filter(
+                    (t): t is { id: string; name: string; color?: string | null } =>
+                      t != null && typeof t.id === "string"
+                  )
+                return (
                 <TableRow
                   key={candidate.id}
                   className="hover:bg-[#F5F5F5]/60 transition-colors duration-150 border-b border-border/30"
@@ -161,6 +194,35 @@ export default async function CandidatesPage() {
                   >
                     {candidate.cultural_score != null ? `${candidate.cultural_score}%` : "—"}
                   </TableCell>
+                  <TableCell
+                    className={`text-right font-bold text-sm ${getScoreColor(
+                      (candidate as { rh_technical_score?: number | null }).rh_technical_score ?? null
+                    )}`}
+                  >
+                    {(candidate as { rh_technical_score?: number | null }).rh_technical_score != null
+                      ? `${(candidate as { rh_technical_score: number }).rh_technical_score}%`
+                      : "—"}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-bold text-sm ${getScoreColor(
+                      (candidate as { rh_cultural_score?: number | null }).rh_cultural_score ?? null
+                    )}`}
+                  >
+                    {(candidate as { rh_cultural_score?: number | null }).rh_cultural_score != null
+                      ? `${(candidate as { rh_cultural_score: number }).rh_cultural_score}%`
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {tagsForDisplay.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 justify-start max-w-[220px]">
+                        {tagsForDisplay.map((t) => (
+                          <TagChip key={t.id} name={t.name} color={t.color ?? null} />
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Button
@@ -189,7 +251,7 @@ export default async function CandidatesPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              )})}
             </TableBody>
           </Table>
         </Card>

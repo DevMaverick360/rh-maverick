@@ -9,6 +9,7 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Candidatos", href: "/dashboard/candidates", icon: Users },
   { name: "Vagas", href: "/dashboard/jobs", icon: Briefcase },
+  { name: "Etiquetas", href: "/dashboard/tags", icon: Tag },
   { name: "Configurações", href: "/dashboard/settings", icon: Settings },
 ];
 

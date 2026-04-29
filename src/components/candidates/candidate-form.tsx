@@ -20,7 +20,14 @@ import {
   Briefcase,
   ClipboardList,
   Eye,
+  UserRoundCog,
+  Tags,
 } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { CandidateTagsField } from '@/components/candidates/candidate-tags-field'
+import { TagChip } from '@/components/candidates/tag-chip'
+import type { CandidateTagOption } from '@/lib/candidates/tag-types'
 
 type FormResponseRow = { question: string; answer: string }
 
@@ -37,6 +44,9 @@ function normalizeFormResponses(raw: unknown): FormResponseRow[] {
 
 interface CandidateFormProps {
   jobs: { id: string; title: string }[]
+  allTags: CandidateTagOption[]
+  /** Admin e RH editam avaliação manual e tags; visualizador só vê. */
+  rhEvaluationEditable: boolean
   initialData?: {
     id: string
     name: string
@@ -45,13 +55,25 @@ interface CandidateFormProps {
     job_id: string | null
     cv_url: string | null
     form_responses?: unknown
+    rh_notes?: string | null
+    rh_technical_score?: number | null
+    rh_cultural_score?: number | null
+    selected_tag_ids?: string[]
   }
 }
 
-export function CandidateForm({ jobs, initialData }: CandidateFormProps) {
+function scoreReadOnlyClass(score: number | null | undefined) {
+  if (score == null) return 'text-muted-foreground'
+  if (score >= 80) return 'text-[#22C55E]'
+  if (score >= 60) return 'text-[#F59E0B]'
+  return 'text-[#FF3B3B]'
+}
+
+export function CandidateForm({ jobs, allTags, rhEvaluationEditable, initialData }: CandidateFormProps) {
   const router = useRouter()
   const isEditing = !!initialData
   const formResponseRows = isEditing ? normalizeFormResponses(initialData?.form_responses) : []
+  const defaultSelectedTags = new Set(initialData?.selected_tag_ids ?? [])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [file, setFile] = useState<File | null>(null)
@@ -240,6 +262,144 @@ export function CandidateForm({ jobs, initialData }: CandidateFormProps) {
                 </select>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Avaliação do RH + tags */}
+        <div className="rounded-2xl border border-border/60 bg-white shadow-sm overflow-hidden">
+          <div className="flex flex-wrap items-start justify-between gap-3 px-6 py-4 border-b border-border/40 bg-[#FAFAFA]">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0F766E]">
+                <UserRoundCog className="h-4 w-4 text-white" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">Avaliação do RH</h3>
+                <p className="text-xs text-muted-foreground">
+                  {rhEvaluationEditable
+                    ? 'Notas e scores humanos (0–100), independentes da análise automática por IA.'
+                    : 'Visualização apenas. Só utilizadores Admin ou RH podem editar scores, notas e etiquetas.'}
+                </p>
+              </div>
+            </div>
+            {!rhEvaluationEditable && (
+              <Badge variant="outline" className="text-[10px] font-semibold shrink-0 border-muted-foreground/30">
+                Somente leitura
+              </Badge>
+            )}
+          </div>
+          <div className="p-6 space-y-5">
+            {rhEvaluationEditable ? (
+              <>
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="rh_technical_score" className="text-sm font-semibold">
+                      Score técnico (RH)
+                      <span className="text-xs text-muted-foreground font-normal ml-1">(0–100, opcional)</span>
+                    </Label>
+                    <Input
+                      id="rh_technical_score"
+                      name="rh_technical_score"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      placeholder="—"
+                      defaultValue={
+                        initialData?.rh_technical_score != null ? String(initialData.rh_technical_score) : ''
+                      }
+                      className="h-11 rounded-lg border-border px-4 text-sm transition-colors focus:border-[#0B0B0B]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="rh_cultural_score" className="text-sm font-semibold">
+                      Score cultural (RH)
+                      <span className="text-xs text-muted-foreground font-normal ml-1">(0–100, opcional)</span>
+                    </Label>
+                    <Input
+                      id="rh_cultural_score"
+                      name="rh_cultural_score"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      placeholder="—"
+                      defaultValue={
+                        initialData?.rh_cultural_score != null ? String(initialData.rh_cultural_score) : ''
+                      }
+                      className="h-11 rounded-lg border-border px-4 text-sm transition-colors focus:border-[#0B0B0B]"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="rh_notes" className="text-sm font-semibold">
+                    Comentário / notas do RH
+                    <span className="text-xs text-muted-foreground font-normal ml-1">(opcional)</span>
+                  </Label>
+                  <Textarea
+                    id="rh_notes"
+                    name="rh_notes"
+                    rows={4}
+                    defaultValue={initialData?.rh_notes ?? ''}
+                    placeholder="Impressões da entrevista, fit cultural, follow-up…"
+                    className="rounded-lg border-border text-sm min-h-[100px] resize-y focus:border-[#0B0B0B]"
+                  />
+                </div>
+                <CandidateTagsField
+                  allTags={allTags}
+                  initialSelectedIds={Array.from(defaultSelectedTags)}
+                />
+              </>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-border/60 bg-[#FAFAFA] p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] mb-2">
+                      Score técnico (RH)
+                    </p>
+                    <p className={`text-2xl font-bold tabular-nums ${scoreReadOnlyClass(initialData?.rh_technical_score)}`}>
+                      {initialData?.rh_technical_score != null ? `${initialData.rh_technical_score}%` : '—'}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-[#FAFAFA] p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] mb-2">
+                      Score cultural (RH)
+                    </p>
+                    <p className={`text-2xl font-bold tabular-nums ${scoreReadOnlyClass(initialData?.rh_cultural_score)}`}>
+                      {initialData?.rh_cultural_score != null ? `${initialData.rh_cultural_score}%` : '—'}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#4F4F4F] mb-2">
+                    Comentário / notas do RH
+                  </p>
+                  {initialData?.rh_notes?.trim() ? (
+                    <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap rounded-lg border border-border/50 bg-[#FAFAFA]/80 p-3">
+                      {initialData.rh_notes}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Sem comentários registados.</p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-border/50 bg-[#FAFAFA]/80 p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Tags className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-semibold">Etiquetas</span>
+                  </div>
+                  {allTags.filter((t) => defaultSelectedTags.has(t.id)).length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {allTags
+                        .filter((t) => defaultSelectedTags.has(t.id))
+                        .map((t) => (
+                          <TagChip key={t.id} name={t.name} color={t.color} />
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Nenhuma etiqueta associada.</p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

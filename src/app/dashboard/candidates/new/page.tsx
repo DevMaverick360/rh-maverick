@@ -1,4 +1,5 @@
 import { CandidateForm } from "@/components/candidates/candidate-form";
+import { canEditRhEvaluation, getPanelRole } from "@/lib/auth/panel-role";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function NewCandidatePage() {
@@ -9,5 +10,18 @@ export default async function NewCandidatePage() {
     .select("id, title")
     .order("title", { ascending: true });
 
-  return <CandidateForm jobs={jobs || []} />;
+  const { data: allTags } = await supabase
+    .from("tags")
+    .select("id, name, slug, color")
+    .order("name", { ascending: true });
+
+  const panelRole = await getPanelRole();
+
+  return (
+    <CandidateForm
+      jobs={jobs || []}
+      allTags={allTags || []}
+      rhEvaluationEditable={canEditRhEvaluation(panelRole)}
+    />
+  );
 }
